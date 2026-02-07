@@ -64,7 +64,7 @@ const safeDate = (dateStr: string) => {
 const getWeekRange = (date: Date) => {
     const d = new Date(date);
     const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const diff = d.getDate() - day; // Start week on Sunday
     const start = new Date(d.setDate(diff));
     start.setHours(0, 0, 0, 0);
     const end = new Date(new Date(start).setDate(start.getDate() + 6));
