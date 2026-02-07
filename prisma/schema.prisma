@@ -11,7 +11,7 @@ datasource db {
 }
 
 model Transaction {
-  id          Int      @id @default(autoincrement())
+  id          String   @id @default(uuid())
   date        DateTime
   amount      Float    // Changed to Float for SQLite compatibility/simplicity as per T3 stack
   category    String
@@ -24,7 +24,7 @@ model Transaction {
 }
 
 model Recurring {
-  id      Int     @id @default(autoincrement())
+  id      String  @id @default(uuid())
   type    String  // 'income' | 'expense'
   name    String
   amount  Float

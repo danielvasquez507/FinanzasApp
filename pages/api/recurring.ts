@@ -17,48 +17,57 @@ export default async function handler(
         }
     } else if (req.method === 'POST') {
         try {
-            const { type, name, amount, owner } = req.body;
+            const { id, type, name, amount, owner, updatedBy } = req.body;
             const parsedAmount = parseFloat(amount);
 
             if (isNaN(parsedAmount)) {
                 return res.status(400).json({ error: 'Invalid amount' });
             }
 
-            const newItem = await prisma.recurring.create({
-                data: {
-                    type,
-                    name,
-                    amount: parsedAmount,
-                    owner
-                },
-            });
+            const recData = {
+                type,
+                name,
+                amount: parsedAmount,
+                owner
+            };
+
+            let newItem;
+            if (id) {
+                newItem = await prisma.recurring.upsert({
+                    where: { id },
+                    update: recData,
+                    create: { ...recData, id }
+                });
+            } else {
+                newItem = await prisma.recurring.create({
+                    data: recData
+                });
+            }
 
             await prisma.auditLog.create({
                 data: {
-                    action: 'CREATE',
+                    action: id ? 'UPSERT' : 'CREATE',
                     entity: 'Recurring',
-                    entityId: newItem.id.toString(),
-                    details: JSON.stringify({ name, amount, type })
+                    entityId: newItem.id,
+                    details: JSON.stringify({ name, amount, type, updatedBy })
                 }
             });
 
             res.status(201).json({ ...newItem, amount: Number(newItem.amount) });
         } catch (error) {
+            console.error('Recurring create error:', error);
             res.status(500).json({ error: 'Failed to create recurring' });
         }
     } else if (req.method === 'DELETE') {
-        const { id } = req.query;
+        const { id, user: updatedBy } = req.query;
         if (!id) return res.status(400).json({ error: 'Missing ID' });
 
         const idStr = Array.isArray(id) ? id[0] : id;
-        const idNum = Number(idStr);
-
-        if (isNaN(idNum)) return res.status(400).json({ error: 'Invalid ID' });
 
         try {
             // Soft Delete
             await prisma.recurring.update({
-                where: { id: idNum },
+                where: { id: idStr as any },
                 data: { deletedAt: new Date() }
             });
 
@@ -67,7 +76,7 @@ export default async function handler(
                     action: 'DELETE',
                     entity: 'Recurring',
                     entityId: idStr,
-                    details: 'Soft deleted via API'
+                    details: JSON.stringify({ message: 'Soft deleted via API', updatedBy })
                 }
             });
 
@@ -76,14 +85,14 @@ export default async function handler(
             res.status(500).json({ error: 'Failed to delete recurring' });
         }
     } else if (req.method === 'PUT') {
-        const { id, type, name, amount, owner } = req.body;
+        const { id, type, name, amount, owner, updatedBy } = req.body;
         const parsedAmount = parseFloat(amount);
 
         if (isNaN(parsedAmount)) return res.status(400).json({ error: 'Invalid amount' });
 
         try {
             const updated = await prisma.recurring.update({
-                where: { id: Number(id) },
+                where: { id: id as any },
                 data: { type, name, amount: parsedAmount, owner }
             });
 
@@ -92,7 +101,7 @@ export default async function handler(
                     action: 'UPDATE',
                     entity: 'Recurring',
                     entityId: id.toString(),
-                    details: JSON.stringify({ name, amount })
+                    details: JSON.stringify({ name, amount, updatedBy })
                 }
             });
 

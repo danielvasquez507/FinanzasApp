@@ -43,40 +43,54 @@ export default async function handler(
         }
     } else if (req.method === 'POST') {
         try {
-            const { date, category, sub, amount, notes, week, isPaid } = req.body;
+            const { id, date, category, sub, amount, notes, week, isPaid, updatedBy } = req.body;
             const dateObj = parseLocalDate(date);
-            const newTx = await prisma.transaction.create({
-                data: {
-                    date: dateObj,
-                    category,
-                    sub,
-                    amount: parseFloat(amount),
-                    notes,
-                    week: week || getWeekRangeStr(dateObj),
-                    isPaid: isPaid || false
-                },
-            });
+            const weekStr = week || getWeekRangeStr(dateObj);
+
+            // Use upsert to handle sync retries (idempotency)
+            const txData = {
+                date: dateObj,
+                category,
+                sub,
+                amount: parseFloat(amount),
+                notes,
+                week: weekStr,
+                isPaid: isPaid || false
+            };
+
+            let finalTx;
+            if (id) {
+                finalTx = await prisma.transaction.upsert({
+                    where: { id },
+                    update: txData,
+                    create: { ...txData, id }
+                });
+            } else {
+                finalTx = await prisma.transaction.create({
+                    data: txData
+                });
+            }
 
             await prisma.auditLog.create({
                 data: {
-                    action: 'CREATE',
+                    action: id ? 'UPSERT' : 'CREATE',
                     entity: 'Transaction',
-                    entityId: newTx.id.toString(),
-                    details: JSON.stringify({ amount, category, date: dateObj })
+                    entityId: finalTx.id.toString(),
+                    details: JSON.stringify({ amount, category, date: dateObj, updatedBy })
                 }
             });
 
-            res.status(201).json({ ...newTx, amount: Number(newTx.amount) });
+            res.status(201).json({ ...finalTx, amount: Number(finalTx.amount) });
         } catch (error) {
-            console.error(error);
+            console.error('Transaction create error:', error);
             res.status(500).json({ error: 'Failed to create transaction' });
         }
     } else if (req.method === 'DELETE') {
-        const { id } = req.query;
+        const { id, user: updatedBy } = req.query;
         try {
             // Soft Delete
             await prisma.transaction.update({
-                where: { id: Number(id) },
+                where: { id: id as any },
                 data: { deletedAt: new Date() }
             });
 
@@ -85,7 +99,7 @@ export default async function handler(
                     action: 'DELETE',
                     entity: 'Transaction',
                     entityId: id.toString(),
-                    details: 'Soft deleted via API'
+                    details: JSON.stringify({ message: 'Soft deleted via API', updatedBy })
                 }
             });
 
@@ -96,12 +110,12 @@ export default async function handler(
     } else if (req.method === 'PUT') {
         const { id } = req.query;
         try {
-            const { date, category, sub, amount, notes, isPaid } = req.body;
+            const { date, category, sub, amount, notes, isPaid, updatedBy } = req.body;
             const dateObj = parseLocalDate(date);
             const weekStr = getWeekRangeStr(dateObj);
 
             const updatedTx = await prisma.transaction.update({
-                where: { id: Number(id) },
+                where: { id: id as any },
                 data: {
                     date: dateObj,
                     category,
@@ -118,7 +132,7 @@ export default async function handler(
                     action: 'UPDATE',
                     entity: 'Transaction',
                     entityId: id.toString(),
-                    details: JSON.stringify({ amount, category })
+                    details: JSON.stringify({ amount, category, updatedBy })
                 }
             });
 

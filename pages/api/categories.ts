@@ -23,15 +23,23 @@ export default async function handler(
 
             if (totalCount === 0) {
                 // Seed if empty
+                console.log('Seeding initial categories...');
                 for (const cat of INITIAL_CATEGORIES) {
-                    await prisma.category.create({
-                        data: {
-                            name: cat.name,
-                            iconKey: cat.iconKey,
-                            color: cat.color,
-                            subs: JSON.stringify(cat.subs)
+                    try {
+                        const existing = await prisma.category.findUnique({ where: { name: cat.name } });
+                        if (!existing) {
+                            await prisma.category.create({
+                                data: {
+                                    name: cat.name,
+                                    iconKey: cat.iconKey,
+                                    color: cat.color,
+                                    subs: JSON.stringify(cat.subs)
+                                }
+                            });
                         }
-                    });
+                    } catch (seedError) {
+                        console.error(`Failed to seed category ${cat.name}:`, seedError);
+                    }
                 }
             }
 
@@ -50,32 +58,44 @@ export default async function handler(
             res.status(500).json({ error: 'Failed to fetch categories' });
         }
     } else if (req.method === 'POST') {
-        const { name, iconKey, color, subs } = req.body;
+        const { id, name, iconKey, color, subs, updatedBy } = req.body;
         try {
-            const newCat = await prisma.category.create({
-                data: {
-                    name,
-                    iconKey,
-                    color,
-                    subs: JSON.stringify(subs || [])
-                }
-            });
+            const catData = {
+                name,
+                iconKey,
+                color,
+                subs: JSON.stringify(subs || [])
+            };
+
+            let newCat;
+            if (id) {
+                newCat = await prisma.category.upsert({
+                    where: { id },
+                    update: catData,
+                    create: { ...catData, id }
+                });
+            } else {
+                newCat = await prisma.category.create({
+                    data: catData
+                });
+            }
 
             await prisma.auditLog.create({
                 data: {
-                    action: 'CREATE',
+                    action: id ? 'UPSERT' : 'CREATE',
                     entity: 'Category',
                     entityId: newCat.id,
-                    details: JSON.stringify({ name, color })
+                    details: JSON.stringify({ name, color, updatedBy })
                 }
             });
 
             res.status(201).json({ ...newCat, subs: JSON.parse(newCat.subs) });
         } catch (e) {
+            console.error('Category create error:', e);
             res.status(500).json({ error: 'Creation failed' });
         }
     } else if (req.method === 'DELETE') {
-        const { id } = req.query;
+        const { id, user: updatedBy } = req.query;
         if (!id) return res.status(400).json({ error: 'Missing ID' });
 
         const idStr = Array.isArray(id) ? id[0] : id;
@@ -83,7 +103,7 @@ export default async function handler(
         try {
             // Soft Delete
             await prisma.category.update({
-                where: { id: idStr },
+                where: { id: idStr as any },
                 data: { deletedAt: new Date() }
             });
 
@@ -92,7 +112,7 @@ export default async function handler(
                     action: 'DELETE',
                     entity: 'Category',
                     entityId: idStr,
-                    details: 'Soft deleted via API'
+                    details: JSON.stringify({ message: 'Soft deleted via API', updatedBy })
                 }
             });
             res.status(200).json({ success: true });
@@ -101,10 +121,10 @@ export default async function handler(
         }
     } else if (req.method === 'PUT') {
         // Update subs, icon, name, color
-        const { id, subs, iconKey, name, color } = req.body;
+        const { id, subs, iconKey, name, color, updatedBy } = req.body;
         try {
             const updated = await prisma.category.update({
-                where: { id },
+                where: { id: id as any },
                 data: {
                     subs: JSON.stringify(subs),
                     iconKey,
@@ -118,7 +138,7 @@ export default async function handler(
                     action: 'UPDATE',
                     entity: 'Category',
                     entityId: id,
-                    details: JSON.stringify({ name, subs: subs?.length })
+                    details: JSON.stringify({ name, subs: subs?.length, updatedBy })
                 }
             });
 
