@@ -241,7 +241,7 @@ export default function App() {
     const [viewDate, setViewDate] = useState(new Date());
 
     // Filtro de Pantalla Movimientos
-    const [listGroupMode, setListGroupMode] = useState<'week' | 'category'>('category');
+    const [listGroupMode, setListGroupMode] = useState<'week' | 'category'>('week');
     const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
 
     // Filtro de Recurrentes (Fijos)
@@ -453,8 +453,13 @@ export default function App() {
         });
     };
 
-    const toggleGroupPaid = async (groupKey: string, mode: 'category' | 'week', targetState: boolean) => {
-        const txsToUpdate = transactions.filter(t => (mode === 'category' ? t.category : t.week) === groupKey && t.isPaid !== targetState);
+    const toggleGroupPaid = async (targetState: boolean, filters: { week?: string, category?: string }) => {
+        const txsToUpdate = transactions.filter(t => {
+            const matchesWeek = filters.week ? t.week === filters.week : true;
+            const matchesCat = filters.category ? t.category === filters.category : true;
+            return matchesWeek && matchesCat && t.isPaid !== targetState;
+        });
+
         if (txsToUpdate.length === 0) return;
 
         try {
@@ -982,17 +987,51 @@ export default function App() {
                                                     </div>
                                                     <span className="text-xs font-bold text-slate-700 dark:text-slate-300 mr-2">${groupTotal.toFixed(2)}</span>
                                                 </div>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); toggleGroupPaid(groupKey, listGroupMode, !allPaid); }}
-                                                    className={`w-12 h-12 flex items-center justify-center transition-all ${allPaid ? 'text-green-500' : 'text-slate-300'}`}
-                                                >
-                                                    {allPaid ? <CheckCircle2 size={24} className="fill-green-100 dark:fill-green-900/30" /> : <div className="w-6 h-6 rounded-full border-2 border-current" />}
-                                                </button>
+                                                {listGroupMode === 'category' && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); toggleGroupPaid(!allPaid, { category: groupKey }); }}
+                                                        className={`w-12 h-12 flex items-center justify-center transition-all ${allPaid ? 'text-green-500' : 'text-slate-300'}`}
+                                                    >
+                                                        {allPaid ? <CheckCircle2 size={24} className="fill-green-100 dark:fill-green-900/30" /> : <div className="w-6 h-6 rounded-full border-2 border-current" />}
+                                                    </button>
+                                                )}
                                             </div>
                                             {isExpanded && (
                                                 <div className="animate-in slide-in-from-top-2 duration-200 divide-y divide-slate-50 dark:divide-slate-800">
-                                                    {listGroupMode === 'category' ? (
-                                                        // Sub-group by week within category
+                                                    {listGroupMode === 'week' ? (
+                                                        // Sub-group by category WITHIN week
+                                                        Array.from(new Set(groupTxs.map(t => t.category))).sort().map(catName => {
+                                                            const catTxs = groupTxs.filter(t => t.category === catName);
+                                                            const catTotal = catTxs.reduce((acc, t) => acc + t.amount, 0);
+                                                            const cInfo = categories.find(c => c.name === catName);
+                                                            const catAllPaid = catTxs.every(t => t.isPaid);
+                                                            return (
+                                                                <div key={catName} className="bg-white dark:bg-slate-950/20">
+                                                                    <div className="px-4 py-2 bg-slate-50/50 dark:bg-slate-900/50 flex justify-between items-center border-b border-slate-50 dark:border-slate-800">
+                                                                        <div className="flex items-center gap-2">
+                                                                            {cInfo && <span className="scale-75 opacity-70">{ICON_LIB[cInfo.iconKey]}</span>}
+                                                                            <span className="text-[10px] font-bold text-slate-500 uppercase">{catName}</span>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-3">
+                                                                            <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">${catTotal.toFixed(2)}</span>
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); toggleGroupPaid(!catAllPaid, { week: groupKey, category: catName }); }}
+                                                                                className={`w-8 h-8 flex items-center justify-center transition-all ${catAllPaid ? 'text-green-500' : 'text-slate-300'}`}
+                                                                            >
+                                                                                {catAllPaid ? <CheckCircle2 size={18} className="fill-green-100 dark:fill-green-900/30" /> : <div className="w-4 h-4 rounded-full border-2 border-current" />}
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="divide-y divide-slate-50 dark:divide-slate-900">
+                                                                        {catTxs.map(tx => (
+                                                                            <TxItem key={tx.id} tx={tx} cat={cInfo} onClick={() => setEditingTx(tx)} />
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })
+                                                    ) : (
+                                                        // Nested weeks within category (Original logic but with week param for toggleGroupPaid)
                                                         Array.from(new Set(groupTxs.map(t => t.week))).sort().reverse().map(subWeek => {
                                                             const subTxs = groupTxs.filter(t => t.week === subWeek);
                                                             const subTotal = subTxs.reduce((acc, t) => acc + t.amount, 0);
@@ -1010,10 +1049,6 @@ export default function App() {
                                                                 </div>
                                                             );
                                                         })
-                                                    ) : (
-                                                        groupTxs.map(tx => (
-                                                            <TxItem key={tx.id} tx={tx} cat={categories.find(c => c.name === tx.category)} onClick={() => setEditingTx(tx)} />
-                                                        ))
                                                     )}
                                                 </div>
                                             )}
