@@ -257,6 +257,13 @@ export default function App() {
     const [confirmModal, setConfirmModal] = useState<{ open: boolean, msg: string, onConfirm: () => void } | null>(null);
     const [inputModal, setInputModal] = useState<{ open: boolean, title: string, placeholder: string, value: string, catId: string } | null>(null);
     const [showListHelp, setShowListHelp] = useState(false);
+    const [showHeader, setShowHeader] = useState(true);
+    const [settingsTab, setSettingsTab] = useState<'menu' | 'themes' | 'import' | 'categories'>('menu');
+
+    useEffect(() => {
+        const timer = setTimeout(() => setShowHeader(false), 30000);
+        return () => clearTimeout(timer);
+    }, []);
 
     useEffect(() => {
         if (activeTab === 'list') {
@@ -818,11 +825,11 @@ export default function App() {
 
 
                 {/* --- HEADER --- */}
-                <header className="flex-none px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center h-14 z-20">
+                <header className={`flex-none px-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center transition-all duration-700 overflow-hidden z-20 ${showHeader ? 'h-14 py-3 opacity-100' : 'h-0 py-0 opacity-0 pointer-events-none'}`}>
                     <div className="flex items-center gap-6">
                         <div className="flex items-center gap-2">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src="/logo.svg" alt="Logo" className="h-8 w-auto" />
+                            <img src="/logo.svg" alt="Logo" className="h-8 w-auto cursor-pointer" onClick={() => setShowHeader(true)} />
                             <h1 className="text-sm font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text hidden sm:block">
                                 Finanzas Vásquez
                             </h1>
@@ -841,6 +848,13 @@ export default function App() {
                         <button onClick={() => setDarkMode(!darkMode)} aria-label="Cambiar tema" title="Cambiar tema" className="p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full">{darkMode ? <Sun size={18} /> : <Moon size={18} />}</button>
                     </div>
                 </header>
+
+                {/* Botón discreto para recuperar el header si está oculto */}
+                {!showHeader && (
+                    <div className="absolute top-0 inset-x-0 h-1 z-30 cursor-pointer group" onClick={() => setShowHeader(true)}>
+                        <div className="mx-auto w-12 h-1 bg-slate-300/20 rounded-full mt-1 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    </div>
+                )}
 
                 {/* --- MAIN CONTENT SCROLLABLE --- */}
                 <main className="flex-1 overflow-y-auto no-scrollbar relative bg-slate-50 dark:bg-slate-950/50">
@@ -1050,42 +1064,111 @@ export default function App() {
 
                     {/* SETTINGS */}
                     {activeTab === 'settings' && (
-                        <div className="p-4 animate-in slide-in-from-right-10">
-                            <button onClick={() => setEditingCategory({ id: '', name: '', iconKey: 'home', color: 'bg-slate-100 text-slate-600', subs: [] })} className="fixed bottom-24 right-4 z-50 bg-blue-600 text-white p-4 rounded-full shadow-2xl shadow-blue-500/30 active:scale-95 transition-transform" aria-label="Nueva Categoría">
-                                <Plus size={24} strokeWidth={3} />
-                            </button>
+                        <div className="p-4 animate-in slide-in-from-right-10 space-y-4">
+                            {settingsTab !== 'menu' && (
+                                <button onClick={() => setSettingsTab('menu')} className="flex items-center gap-2 text-xs font-bold text-blue-600 mb-2">
+                                    <ChevronLeft size={16} /> Volver a Ajustes
+                                </button>
+                            )}
 
-                            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
-                                {categories.map(cat => (
-                                    <div key={cat.id} className="p-4">
-                                        <div className="flex items-center gap-3 mb-3">
-                                            <div className={`p-2 rounded-2xl ${cat.color.split(' ')[0]} ${cat.color.split(' ')[1]}`}>{ICON_LIB[cat.iconKey]}</div>
-                                            <div className="flex-1 font-bold text-sm dark:text-white">{cat.name}</div>
-                                            <div className="flex gap-1">
-                                                <button onClick={() => setEditingCategory(cat)} title="Editar" className="p-2 bg-slate-50 dark:bg-slate-800 rounded text-blue-500 hover:bg-blue-50"><Edit3 size={14} /></button>
-                                                <button onClick={() => handleDeleteCategory(cat.id)} title="Eliminar" className="p-2 bg-slate-50 dark:bg-slate-800 rounded text-red-500 hover:bg-red-50"><Trash2 size={14} /></button>
+                            {settingsTab === 'menu' && (
+                                <div className="grid grid-cols-1 gap-3">
+                                    <button onClick={() => setSettingsTab('themes')} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-between group shadow-sm">
+                                        <div className="flex items-center gap-4">
+                                            <div className="p-3 bg-orange-50 dark:bg-orange-900/20 text-orange-600 rounded-xl group-hover:scale-110 transition-transform">
+                                                {darkMode ? <Moon size={24} /> : <Sun size={24} />}
+                                            </div>
+                                            <div className="text-left">
+                                                <div className="font-bold text-sm dark:text-white">Temas</div>
+                                                <div className="text-[10px] text-slate-500 uppercase font-black tracking-widest">{darkMode ? 'Oscuro' : 'Claro'}</div>
                                             </div>
                                         </div>
-                                        <div className="flex flex-wrap gap-2 ml-2">
-                                            {cat.subs.map(sub => (
-                                                <div key={sub} className="group relative text-xs bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center gap-2 hover:bg-red-50 dark:hover:bg-red-900/10 hover:border-red-200 transition-colors cursor-default">
-                                                    {sub}
-                                                    <button
-                                                        onClick={() => handleDeleteSubcategory(cat.id, sub)}
-                                                        className="text-slate-300 hover:text-red-500 transition-colors p-0.5 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30"
-                                                        title="Eliminar Subcategoría"
-                                                    >
-                                                        <X size={12} strokeWidth={3} />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                            <button onClick={() => {
-                                                setInputModal({ open: true, title: `Nueva subcategoría en ${cat.name}`, placeholder: "Nombre...", value: "", catId: cat.id });
-                                            }} className="text-[10px] border border-dashed border-slate-300 text-slate-400 px-3 py-1.5 rounded-lg hover:bg-slate-50 hover:text-blue-500 hover:border-blue-300 transition-colors">+ Agregar</button>
+                                        <ChevronRight size={20} className="text-slate-300" />
+                                    </button>
+
+                                    <button onClick={() => setShowBulkModal(true)} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-between group shadow-sm">
+                                        <div className="flex items-center gap-4">
+                                            <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 rounded-xl group-hover:scale-110 transition-transform">
+                                                <UploadCloud size={24} />
+                                            </div>
+                                            <div className="text-left">
+                                                <div className="font-bold text-sm dark:text-white">Importar</div>
+                                                <div className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Cargar CSV con IA</div>
+                                            </div>
                                         </div>
+                                        <ChevronRight size={20} className="text-slate-300" />
+                                    </button>
+
+                                    <button onClick={() => setSettingsTab('categories')} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-between group shadow-sm">
+                                        <div className="flex items-center gap-4">
+                                            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded-xl group-hover:scale-110 transition-transform">
+                                                <Grid size={24} />
+                                            </div>
+                                            <div className="text-left">
+                                                <div className="font-bold text-sm dark:text-white">Categorías</div>
+                                                <div className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Gestionar secciones y subcategorías</div>
+                                            </div>
+                                        </div>
+                                        <ChevronRight size={20} className="text-slate-300" />
+                                    </button>
+                                </div>
+                            )}
+
+                            {settingsTab === 'themes' && (
+                                <div className="space-y-4">
+                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Seleccionar Tema</h3>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <button onClick={() => setDarkMode(false)} className={`flex flex-col items-center gap-3 p-6 rounded-3xl border-2 transition-all ${!darkMode ? 'bg-white border-blue-500 shadow-xl' : 'bg-white/50 border-transparent opacity-60'}`}>
+                                            <div className="p-4 bg-orange-100 text-orange-600 rounded-2xl"><Sun size={32} /></div>
+                                            <span className="font-bold text-sm text-slate-700">Claro</span>
+                                        </button>
+                                        <button onClick={() => setDarkMode(true)} className={`flex flex-col items-center gap-3 p-6 rounded-3xl border-2 transition-all ${darkMode ? 'bg-slate-900 border-blue-500 shadow-xl' : 'bg-slate-900/50 border-transparent opacity-40'}`}>
+                                            <div className="p-4 bg-slate-800 text-slate-300 rounded-2xl"><Moon size={32} /></div>
+                                            <span className="font-bold text-sm text-slate-200">Oscuro</span>
+                                        </button>
                                     </div>
-                                ))}
-                            </div>
+                                </div>
+                            )}
+
+                            {settingsTab === 'categories' && (
+                                <div className="animate-in fade-in space-y-4">
+                                    <button onClick={() => setEditingCategory({ id: '', name: '', iconKey: 'home', color: 'bg-slate-100 text-slate-600', subs: [] })} className="fixed bottom-24 right-4 z-50 bg-blue-600 text-white p-4 rounded-full shadow-2xl shadow-blue-500/30 active:scale-95 transition-transform" aria-label="Nueva Categoría">
+                                        <Plus size={24} strokeWidth={3} />
+                                    </button>
+
+                                    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
+                                        {categories.map(cat => (
+                                            <div key={cat.id} className="p-4">
+                                                <div className="flex items-center gap-3 mb-3">
+                                                    <div className={`p-2 rounded-2xl ${cat.color.split(' ')[0]} ${cat.color.split(' ')[1]}`}>{ICON_LIB[cat.iconKey]}</div>
+                                                    <div className="flex-1 font-bold text-sm dark:text-white">{cat.name}</div>
+                                                    <div className="flex gap-1">
+                                                        <button onClick={() => setEditingCategory(cat)} title="Editar" className="p-2 bg-slate-50 dark:bg-slate-800 rounded text-blue-500 hover:bg-blue-50"><Edit3 size={14} /></button>
+                                                        <button onClick={() => handleDeleteCategory(cat.id)} title="Eliminar" className="p-2 bg-slate-50 dark:bg-slate-800 rounded text-red-500 hover:bg-red-50"><Trash2 size={14} /></button>
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2 ml-2">
+                                                    {cat.subs.map(sub => (
+                                                        <div key={sub} className="group relative text-xs bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center gap-2 hover:bg-red-50 dark:hover:bg-red-900/10 hover:border-red-200 transition-colors cursor-default">
+                                                            {sub}
+                                                            <button
+                                                                onClick={() => handleDeleteSubcategory(cat.id, sub)}
+                                                                className="text-slate-300 hover:text-red-500 transition-colors p-0.5 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30"
+                                                                title="Eliminar Subcategoría"
+                                                            >
+                                                                <X size={12} strokeWidth={3} />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                    <button onClick={() => {
+                                                        setInputModal({ open: true, title: `Nueva subcategoría en ${cat.name}`, placeholder: "Nombre...", value: "", catId: cat.id });
+                                                    }} className="text-[10px] border border-dashed border-slate-300 text-slate-400 px-3 py-1.5 rounded-lg hover:bg-slate-50 hover:text-blue-500 hover:border-blue-300 transition-colors">+ Agregar</button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 
