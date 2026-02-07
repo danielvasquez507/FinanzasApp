@@ -1064,9 +1064,7 @@ export default function App() {
 
                     {/* SETTINGS */}
                     {activeTab === 'settings' && (
-                        <div className="p-4 animate-in slide-in-from-right-10 space-y-4">
-
-
+                        <div className="p-4 animate-in slide-in-from-right-10">
                             {settingsTab === 'menu' && (
                                 <div className="grid grid-cols-1 gap-3">
                                     <button onClick={() => setSettingsTab('themes')} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-between group shadow-sm">
