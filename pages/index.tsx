@@ -219,6 +219,7 @@ export default function App() {
 
     // Filtro de Pantalla Movimientos
     const [listGroupMode, setListGroupMode] = useState<'week' | 'category'>('category');
+    const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
 
     // Filtro de Recurrentes (Fijos)
     const [recurringTab, setRecurringTab] = useState('all');
@@ -272,6 +273,10 @@ export default function App() {
     useEffect(() => {
         loadData();
     }, []);
+
+    useEffect(() => {
+        setExpandedGroups([]);
+    }, [listGroupMode, activeTab]);
 
     // Detect Keyboard Open
     useEffect(() => {
@@ -913,55 +918,65 @@ export default function App() {
                                     const groupTxs = transactions.filter(t => (listGroupMode === 'week' ? t.week : t.category) === groupKey);
                                     const groupTotal = groupTxs.reduce((acc, t) => acc + t.amount, 0);
                                     const catInfo = listGroupMode === 'category' ? categories.find(c => c.name === groupKey) : null;
+                                    const isExpanded = expandedGroups.includes(groupKey);
 
                                     return (
-                                        <div key={groupKey} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
-                                            <div className="p-3 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center border-b border-slate-100 dark:border-slate-800">
+                                        <div key={groupKey} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm transition-all">
+                                            <div
+                                                onClick={() => setExpandedGroups(prev => isExpanded ? prev.filter(k => k !== groupKey) : [...prev, groupKey])}
+                                                className="p-3 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center cursor-pointer active:bg-slate-100 dark:active:bg-slate-800 transition-colors"
+                                            >
                                                 <div className="flex items-center gap-2">
+                                                    <div className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : 'rotate-0'}`}>
+                                                        <ChevronDown size={14} className="text-slate-400" />
+                                                    </div>
                                                     {catInfo && <span className="text-blue-500 scale-75">{ICON_LIB[catInfo.iconKey]}</span>}
                                                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{groupKey}</span>
+                                                    <span className="text-[9px] bg-slate-200 dark:bg-slate-700 text-slate-500 px-1.5 rounded-full">{groupTxs.length}</span>
                                                 </div>
                                                 <span className="text-xs font-bold text-slate-700 dark:text-slate-300">${groupTotal.toFixed(2)}</span>
                                             </div>
-                                            <div className="divide-y divide-slate-50 dark:divide-slate-800">
-                                                {groupTxs.map(tx => {
-                                                    const cat = categories.find(c => c.name === tx.category);
-                                                    return (
-                                                        <div key={tx.id} className="p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group">
-                                                            {/* Left: Info (Click to Edit) */}
-                                                            <div className="flex items-center gap-3 flex-1 min-w-0 pointer-events-auto" onClick={() => setEditingTx(tx)}>
-                                                                <div className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center transition-all ${cat?.color || 'bg-slate-100 text-slate-500'} ${tx.isPaid ? 'grayscale opacity-40 scale-90' : 'shadow-sm'}`}>
-                                                                    {ICON_LIB[cat?.iconKey]}
-                                                                </div>
-                                                                <div className="truncate">
-                                                                    <div className={`text-xs font-bold truncate transition-all ${tx.isPaid ? 'line-through text-slate-400' : 'text-slate-800 dark:text-slate-200'}`}>
-                                                                        {tx.sub}
+                                            {isExpanded && (
+                                                <div className="divide-y divide-slate-50 dark:divide-slate-800 animate-in slide-in-from-top-2 duration-200">
+                                                    {groupTxs.map(tx => {
+                                                        const cat = categories.find(c => c.name === tx.category);
+                                                        return (
+                                                            <div key={tx.id} className="p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group">
+                                                                {/* Left: Info (Click to Edit) */}
+                                                                <div className="flex items-center gap-3 flex-1 min-w-0 pointer-events-auto" onClick={() => setEditingTx(tx)}>
+                                                                    <div className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center transition-all ${cat?.color || 'bg-slate-100 text-slate-500'} ${tx.isPaid ? 'grayscale opacity-40 scale-90' : 'shadow-sm'}`}>
+                                                                        {ICON_LIB[cat?.iconKey]}
                                                                     </div>
-                                                                    <div className="text-[9px] text-slate-500 dark:text-slate-500 font-medium truncate uppercase tracking-tighter">
-                                                                        {listGroupMode === 'week' ? `${tx.category} • ` : ''}{tx.date}
+                                                                    <div className="truncate">
+                                                                        <div className={`text-xs font-bold truncate transition-all ${tx.isPaid ? 'line-through text-slate-400' : 'text-slate-800 dark:text-slate-200'}`}>
+                                                                            {tx.sub}
+                                                                        </div>
+                                                                        <div className="text-[9px] text-slate-500 dark:text-slate-500 font-medium truncate uppercase tracking-tighter">
+                                                                            {listGroupMode === 'week' ? `${tx.category} • ` : ''}{tx.date}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
-                                                            </div>
 
-                                                            {/* Right: Toggle & Amount */}
-                                                            <div className="flex items-center gap-1 ml-2">
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); togglePaid(tx.id); }}
-                                                                    className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full transition-all active:scale-75 ${tx.isPaid ? 'text-green-500 bg-green-50 dark:bg-green-900/20' : 'text-slate-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/10'}`}
-                                                                    aria-label={tx.isPaid ? "Marcar como pendiente" : "Marcar como pagado"}
-                                                                >
-                                                                    {tx.isPaid ? <CheckCircle2 size={24} className="fill-green-100 dark:fill-green-900/30" /> : <div className="w-6 h-6 rounded-full border-2 border-current" />}
-                                                                </button>
-                                                                <div className="text-right pointer-events-auto min-w-[70px]" onClick={() => setEditingTx(tx)}>
-                                                                    <div className={`font-mono font-bold text-sm transition-all ${tx.isPaid ? 'text-slate-300' : 'text-slate-900 dark:text-white'}`}>
-                                                                        ${tx.amount.toFixed(2)}
+                                                                {/* Right: Toggle & Amount */}
+                                                                <div className="flex items-center gap-1 ml-2">
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); togglePaid(tx.id); }}
+                                                                        className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full transition-all active:scale-75 ${tx.isPaid ? 'text-green-500 bg-green-50 dark:bg-green-900/20' : 'text-slate-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/10'}`}
+                                                                        aria-label={tx.isPaid ? "Marcar como pendiente" : "Marcar como pagado"}
+                                                                    >
+                                                                        {tx.isPaid ? <CheckCircle2 size={24} className="fill-green-100 dark:fill-green-900/30" /> : <div className="w-6 h-6 rounded-full border-2 border-current" />}
+                                                                    </button>
+                                                                    <div className="text-right pointer-events-auto min-w-[70px]" onClick={() => setEditingTx(tx)}>
+                                                                        <div className={`font-mono font-bold text-sm transition-all ${tx.isPaid ? 'text-slate-300' : 'text-slate-900 dark:text-white'}`}>
+                                                                            ${tx.amount.toFixed(2)}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })}
