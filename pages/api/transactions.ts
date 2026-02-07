@@ -17,8 +17,10 @@ const getWeekRangeStr = (date: Date) => {
     start.setHours(0, 0, 0, 0);
     const end = new Date(new Date(start).setDate(start.getDate() + 6));
     end.setHours(23, 59, 59, 999);
-    const opts: any = { month: 'short', day: 'numeric' };
-    return `${start.toLocaleDateString('es-ES', opts)} - ${end.toLocaleDateString('es-ES', opts)}`;
+
+    const months = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+    const fmt = (dt: Date) => `${dt.getDate()} ${months[dt.getMonth()]}`;
+    return `${fmt(start)} - ${fmt(end)}`;
 };
 
 export default async function handler(

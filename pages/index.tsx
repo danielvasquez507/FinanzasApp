@@ -73,13 +73,10 @@ const getWeekRange = (date: Date) => {
 };
 
 const formatDateRange = (start: Date, end: Date) => {
-    const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-    const dateToLocal = (d: Date) => {
-        const local = new Date(d);
-        local.setMinutes(local.getMinutes() + local.getTimezoneOffset());
-        return local.toLocaleDateString('es-ES', opts);
-    };
-    return `${dateToLocal(start)} - ${dateToLocal(end)}`;
+    const months = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+    // Since we work with midnight-local dates in the frontend:
+    const fmt = (d: Date) => `${d.getDate()} ${months[d.getMonth()]}`;
+    return `${fmt(start)} - ${fmt(end)}`;
 };
 
 const ICON_LIB: any = {
@@ -201,7 +198,9 @@ const getWeekString = (date: Date) => {
 
 const mapApiToLocal = (tx: any): Transaction => {
     const d = tx.date ? new Date(tx.date) : new Date();
-    return { ...tx, date: d.toISOString().split('T')[0] };
+    // Neutralize TZ from database (UTC) to local
+    const localDate = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    return { ...tx, date: localDate.toISOString().split('T')[0] };
 };
 
 // ==========================================
