@@ -880,13 +880,8 @@ export default function App() {
                                                             </div>
                                                         </div>
 
-                                                        {/* Right: Amount & Toggle */}
-                                                        <div className="flex items-center gap-4 ml-2">
-                                                            <div className="text-right pointer-events-auto" onClick={() => setEditingTx(tx)}>
-                                                                <div className={`font-mono font-bold text-sm transition-all ${tx.isPaid ? 'text-slate-300' : 'text-slate-900 dark:text-white'}`}>
-                                                                    ${tx.amount.toFixed(2)}
-                                                                </div>
-                                                            </div>
+                                                        {/* Right: Toggle & Amount */}
+                                                        <div className="flex items-center gap-3 ml-2">
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); togglePaid(tx.id); }}
                                                                 className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full transition-all active:scale-75 ${tx.isPaid ? 'text-green-500 bg-green-50 dark:bg-green-900/20' : 'text-slate-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/10'}`}
@@ -894,6 +889,11 @@ export default function App() {
                                                             >
                                                                 {tx.isPaid ? <CheckCircle2 size={24} className="fill-green-100 dark:fill-green-900/30" /> : <div className="w-6 h-6 rounded-full border-2 border-current" />}
                                                             </button>
+                                                            <div className="text-right pointer-events-auto min-w-[70px]" onClick={() => setEditingTx(tx)}>
+                                                                <div className={`font-mono font-bold text-sm transition-all ${tx.isPaid ? 'text-slate-300' : 'text-slate-900 dark:text-white'}`}>
+                                                                    ${tx.amount.toFixed(2)}
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 );
