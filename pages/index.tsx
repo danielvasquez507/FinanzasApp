@@ -324,7 +324,15 @@ export default function App() {
     const [showBulkModal, setShowBulkModal] = useState(false);
     const [csvText, setCsvText] = useState('');
     const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+    const [editAmountStr, setEditAmountStr] = useState('');
     const [isCopied, setIsCopied] = useState(false);
+
+    useEffect(() => {
+        if (editingTx) {
+            const val = editingTx.amount;
+            setEditAmountStr(val % 1 === 0 ? val.toString() : val.toFixed(2));
+        }
+    }, [editingTx?.id]);
 
 
     // --- LOGICA DE NAVEGACION TIEMPO ---
@@ -828,7 +836,23 @@ export default function App() {
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block text-center mb-2">Monto (TC)</span>
                                 <div className="flex justify-center items-center mb-2 text-slate-800 dark:text-white">
                                     <span className="text-4xl text-slate-300 font-light mr-1">$</span>
-                                    <input type="number" step="0.01" aria-label="Ingresar monto" title="Monto de la transacción" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="text-6xl font-bold bg-transparent w-full text-center outline-none placeholder:text-slate-100 dark:placeholder:text-slate-800" autoFocus />
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        aria-label="Ingresar monto"
+                                        title="Monto de la transacción"
+                                        placeholder="0.00"
+                                        value={amount}
+                                        onChange={(e) => setAmount(e.target.value)}
+                                        onBlur={() => {
+                                            if (amount) {
+                                                const val = parseFloat(amount);
+                                                if (!isNaN(val)) setAmount(val % 1 === 0 ? val.toString() : val.toFixed(2));
+                                            }
+                                        }}
+                                        className="text-6xl font-bold bg-transparent w-full text-center outline-none placeholder:text-slate-100 dark:placeholder:text-slate-800"
+                                        autoFocus
+                                    />
                                 </div>
                             </div>
                             <div className="flex-1 space-y-3">
@@ -998,7 +1022,23 @@ export default function App() {
                             <div className="flex gap-2">
                                 <div className="w-1/2">
                                     <label className="text-xs text-slate-400 uppercase font-bold" htmlFor="edit-amount">Monto</label>
-                                    <input id="edit-amount" type="number" step="0.01" aria-label="Monto" title="Editar monto" value={editingTx.amount} onChange={(e) => setEditingTx({ ...editingTx, amount: parseFloat(e.target.value) || 0 })} className="w-full bg-slate-50 dark:bg-slate-800 p-3 rounded-xl font-bold dark:text-white mt-1" />
+                                    <input
+                                        id="edit-amount"
+                                        type="number"
+                                        step="0.01"
+                                        aria-label="Monto"
+                                        title="Editar monto"
+                                        value={editAmountStr}
+                                        onChange={(e) => {
+                                            setEditAmountStr(e.target.value);
+                                            setEditingTx({ ...editingTx, amount: parseFloat(e.target.value) || 0 });
+                                        }}
+                                        onBlur={() => {
+                                            const val = parseFloat(editAmountStr);
+                                            if (!isNaN(val)) setEditAmountStr(val % 1 === 0 ? val.toString() : val.toFixed(2));
+                                        }}
+                                        className="w-full bg-slate-50 dark:bg-slate-800 p-3 rounded-xl font-bold dark:text-white mt-1"
+                                    />
                                 </div>
                                 <div className="w-1/2">
                                     <label className="text-xs text-slate-400 uppercase font-bold">Fecha</label>
