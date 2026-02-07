@@ -244,6 +244,7 @@ export default function App() {
 
     const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
     const [calendarModal, setCalendarModal] = useState(false);
+    const [optionPicker, setOptionPicker] = useState<{ title: string, options: string[], onSelect: (val: string) => void } | null>(null);
 
     useEffect(() => {
         loadData();
@@ -937,13 +938,35 @@ export default function App() {
                         <div className="bg-white dark:bg-slate-900 w-full rounded-3xl p-6 shadow-2xl space-y-4">
                             <h3 className="font-bold text-lg dark:text-white">Editar Movimiento</h3>
                             <div><label className="text-xs text-slate-400 uppercase font-bold" htmlFor="edit-amount">Monto</label><input id="edit-amount" type="number" aria-label="Monto" title="Editar monto" value={editingTx.amount} onChange={(e) => setEditingTx({ ...editingTx, amount: parseFloat(e.target.value) })} className="w-full bg-slate-50 dark:bg-slate-800 p-3 rounded-xl font-bold dark:text-white mt-1" /></div>
-                            <div><label className="text-xs text-slate-400 uppercase font-bold">Categoría</label>
+                            <div><label className="text-xs text-slate-400 uppercase font-bold">Categoría y Subcategoría</label>
                                 <div className="flex gap-2 mt-1">
-                                    <select aria-label="Seleccionar categoría" title="Categoría principal" value={editingTx.category} onChange={(e) => setEditingTx({ ...editingTx, category: e.target.value, sub: '' })} className="w-1/2 bg-slate-50 dark:bg-slate-800 p-3 rounded-xl dark:text-white text-xs font-bold outline-none">{categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select>
-                                    <select aria-label="Seleccionar subcategoría" title="Subcategoría" value={editingTx.sub} onChange={(e) => setEditingTx({ ...editingTx, sub: e.target.value })} className="w-1/2 bg-slate-50 dark:bg-slate-800 p-3 rounded-xl dark:text-white text-xs font-bold outline-none">
-                                        <option value="">Seleccionar...</option>
-                                        {categories.find(c => c.name === editingTx.category)?.subs.map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
+                                    <button
+                                        onClick={() => setOptionPicker({
+                                            title: "Seleccionar Categoría",
+                                            options: categories.map(c => c.name),
+                                            onSelect: (val) => setEditingTx({ ...editingTx, category: val, sub: '' })
+                                        })}
+                                        className="w-1/2 bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl dark:text-white text-xs font-bold text-left flex justify-between items-center border border-slate-100 dark:border-slate-800 active:scale-95 transition-transform"
+                                    >
+                                        <span className="truncate">{editingTx.category}</span>
+                                        <ChevronDown size={14} className="text-slate-400 ml-1 flex-shrink-0" />
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            const cat = categories.find(c => c.name === editingTx.category);
+                                            if (cat) {
+                                                setOptionPicker({
+                                                    title: "Seleccionar Subcategoría",
+                                                    options: cat.subs,
+                                                    onSelect: (val) => setEditingTx({ ...editingTx, sub: val })
+                                                })
+                                            }
+                                        }}
+                                        className="w-1/2 bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl dark:text-white text-xs font-bold text-left flex justify-between items-center border border-slate-100 dark:border-slate-800 active:scale-95 transition-transform"
+                                    >
+                                        <span className="truncate">{editingTx.sub || 'Seleccionar...'}</span>
+                                        <ChevronDown size={14} className="text-slate-400 ml-1 flex-shrink-0" />
+                                    </button>
                                 </div>
                             </div>
                             <div><label className="text-xs text-slate-400 uppercase font-bold" htmlFor="edit-note">Nota</label><input id="edit-note" type="text" aria-label="Nota" title="Nota adicional" value={editingTx.notes} onChange={(e) => setEditingTx({ ...editingTx, notes: e.target.value })} className="w-full bg-slate-50 dark:bg-slate-800 p-3 rounded-xl dark:text-white mt-1" /></div>
@@ -1109,6 +1132,29 @@ export default function App() {
                 {calendarModal && (
                     <div className="absolute inset-0 z-[90] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
                         <DatePicker value={date} onChange={setDate} onClose={() => setCalendarModal(false)} />
+                    </div>
+                )}
+                {/* --- OPTION PICKER MODAL --- */}
+                {optionPicker && (
+                    <div className="absolute inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center animate-in fade-in">
+                        <div className="bg-white dark:bg-slate-900 w-full sm:max-w-sm rounded-t-[2rem] sm:rounded-[2rem] p-6 shadow-2xl animate-in slide-in-from-bottom-10 flex flex-col max-h-[70vh]">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="font-bold text-lg dark:text-white">{optionPicker.title}</h3>
+                                <button onClick={() => setOptionPicker(null)} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-500"><X size={20} /></button>
+                            </div>
+                            <div className="overflow-y-auto space-y-2 no-scrollbar pb-4">
+                                {optionPicker.options.length === 0 && <div className="text-center py-8 text-slate-400 text-sm">No hay opciones disponibles</div>}
+                                {optionPicker.options.map(opt => (
+                                    <button
+                                        key={opt}
+                                        onClick={() => { optionPicker.onSelect(opt); setOptionPicker(null); }}
+                                        className="w-full text-left p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-slate-700 dark:text-slate-200 font-bold text-sm transition-colors border border-transparent hover:border-blue-200 dark:hover:border-blue-800"
+                                    >
+                                        {opt}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>
