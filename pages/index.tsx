@@ -218,7 +218,7 @@ export default function App() {
     const [viewDate, setViewDate] = useState(new Date());
 
     // Filtro de Pantalla Movimientos
-    const [listGroupMode, setListGroupMode] = useState<'week' | 'category'>('week');
+    const [listGroupMode, setListGroupMode] = useState<'week' | 'category'>('category');
 
     // Filtro de Recurrentes (Fijos)
     const [recurringTab, setRecurringTab] = useState('all');
@@ -881,12 +881,12 @@ export default function App() {
                     {/* LIST & CONCILE UNIFIED */}
                     {activeTab === 'list' && (
                         <div className="animate-in fade-in space-y-4 p-4">
-                            <div className="bg-slate-200 dark:bg-slate-800 p-1 rounded-xl flex font-bold text-[10px] relative">
-                                {['week', 'category'].map(mode => (
+                            <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl flex font-bold text-[10px] overflow-hidden border border-slate-200/50 dark:border-slate-700/50">
+                                {['category', 'week'].map(mode => (
                                     <button
                                         key={mode}
                                         onClick={() => setListGroupMode(mode as any)}
-                                        className={`flex-1 py-2 rounded-lg transition-all ${listGroupMode === mode ? 'bg-white dark:bg-slate-700 text-black dark:text-white shadow-sm' : 'text-slate-500'}`}
+                                        className={`flex-1 py-3 transition-all ${listGroupMode === mode ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500'}`}
                                     >
                                         {mode === 'week' ? 'Agrupar por Semana' : 'Agrupar por Categoría'}
                                     </button>
