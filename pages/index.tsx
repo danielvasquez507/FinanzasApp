@@ -200,7 +200,6 @@ import Head from 'next/head';
 
 export default function App() {
     const [activeTab, setActiveTab] = useState('dashboard');
-    const [listMode, setListMode] = useState('table');
     const [darkMode, setDarkMode] = useState(true);
 
     // Filtros de Tiempo
@@ -825,37 +824,73 @@ export default function App() {
                         </div>
                     )}
 
-                    {/* LIST & CONCILE */}
+                    {/* LIST & CONCILE UNIFIED */}
                     {activeTab === 'list' && (
                         <div className="animate-in fade-in space-y-4 p-4">
-                            <div className="flex bg-slate-200 dark:bg-slate-800 p-1 rounded-xl font-bold text-xs"><button onClick={() => setListMode('table')} aria-label="Ver movimientos" title="Lista de movimientos" className={`flex-1 py-2 rounded-lg ${listMode === 'table' ? 'bg-white dark:bg-slate-700 shadow' : 'text-slate-500'}`}>Movimientos</button><button onClick={() => setListMode('reconcile')} aria-label="Conciliar consumos" title="Módulo de conciliación" className={`flex-1 py-2 rounded-lg ${listMode === 'reconcile' ? 'bg-white dark:bg-slate-700 shadow' : 'text-slate-500'}`}>Conciliar</button></div>
-                            {listMode === 'table' && (
-                                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
-                                    {transactions.length === 0 && <div className="p-8 text-center text-xs text-slate-400">Sin registros</div>}
-                                    {transactions.map((tx) => {
-                                        const cat = categories.find(c => c.name === tx.category);
-                                        return (
-                                            <div key={tx.id} onClick={() => setEditingTx(tx)} className="p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer group">
-                                                <div className="flex items-center gap-3 flex-1 min-w-0"><div className={`w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center text-xs font-bold ${cat?.color || 'bg-slate-100 text-slate-500'}`}>{ICON_LIB[cat?.iconKey]}</div><div className="truncate"><div className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{tx.sub}</div><div className="text-[10px] text-slate-500 truncate">{tx.category} • {tx.date}</div></div></div>
-                                                <div className="text-right flex-shrink-0 ml-2"><div className="font-bold text-sm text-slate-800 dark:text-white">${tx.amount.toFixed(2)}</div>{tx.isPaid && <span className="text-[9px] text-green-500 font-bold flex items-center justify-end gap-1"><CheckCircle2 size={10} /> Pagado</span>}</div>
-                                            </div>
-                                        );
-                                    })}
+                            <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-xl text-[10px] text-indigo-800 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800 flex gap-2 items-center">
+                                <AlertCircle size={14} />
+                                <span>Toca el círculo para marcar como pagado. Toca el gasto para editar.</span>
+                            </div>
+
+                            {transactions.length === 0 && (
+                                <div className="bg-white dark:bg-slate-900 rounded-2xl p-12 text-center border border-dashed border-slate-200 dark:border-slate-800">
+                                    <div className="text-slate-300 mb-2"><ListTodo size={40} className="mx-auto opacity-20" /></div>
+                                    <div className="text-xs text-slate-400 font-medium">No hay movimientos registrados</div>
                                 </div>
                             )}
-                            {listMode === 'reconcile' && (
-                                <div className="space-y-4">
-                                    <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-xl text-xs text-indigo-800 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800 flex gap-2"><AlertCircle size={16} /><span>Marca lo pagado a la Tarjeta.</span></div>
-                                    {Array.from(new Set(transactions.map(t => t.week))).sort().reverse().map(week => (
-                                        <div key={week} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-                                            <div className="p-3 bg-slate-50 dark:bg-slate-800/50 flex justify-between border-b border-slate-100 dark:border-slate-800"><span className="text-xs font-bold text-slate-500 uppercase">Semana {week}</span></div>
-                                            {transactions.filter(t => t.week === week).map(tx => (
-                                                <div key={tx.id} onClick={() => togglePaid(tx.id)} className="p-3 flex justify-between items-center cursor-pointer border-b border-slate-50 dark:border-slate-800 last:border-0"><div className="flex items-center gap-3 flex-1 min-w-0">{tx.isPaid ? <CheckCircle2 size={20} className="text-green-500 fill-green-100 dark:fill-green-900/30 flex-shrink-0" /> : <div className="w-5 h-5 rounded-full border-2 border-slate-300 flex-shrink-0"></div>}<div className="truncate"><div className={`text-xs font-bold truncate ${tx.isPaid ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-300'}`}>{tx.sub}</div><div className="text-[9px] text-slate-400 truncate">{tx.category}</div></div></div><span className={`text-xs font-bold flex-shrink-0 ml-2 ${tx.isPaid ? 'text-slate-300' : 'text-slate-600 dark:text-slate-400'}`}>${tx.amount.toFixed(2)}</span></div>
-                                            ))}
+
+                            {Array.from(new Set(transactions.map(t => t.week))).sort().reverse().map(week => {
+                                const weekTxs = transactions.filter(t => t.week === week);
+                                const weekTotal = weekTxs.reduce((acc, t) => acc + t.amount, 0);
+
+                                return (
+                                    <div key={week} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
+                                        <div className="p-3 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center border-b border-slate-100 dark:border-slate-800">
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{week}</span>
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">${weekTotal.toFixed(2)}</span>
                                         </div>
-                                    ))}
-                                </div>
-                            )}
+                                        <div className="divide-y divide-slate-50 dark:divide-slate-800">
+                                            {weekTxs.map(tx => {
+                                                const cat = categories.find(c => c.name === tx.category);
+                                                return (
+                                                    <div key={tx.id} className="p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group">
+                                                        {/* Left: Info (Click to Edit) */}
+                                                        <div className="flex items-center gap-3 flex-1 min-w-0 pointer-events-auto" onClick={() => setEditingTx(tx)}>
+                                                            <div className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center transition-all ${cat?.color || 'bg-slate-100 text-slate-500'} ${tx.isPaid ? 'grayscale opacity-40 scale-90' : 'shadow-sm'}`}>
+                                                                {ICON_LIB[cat?.iconKey]}
+                                                            </div>
+                                                            <div className="truncate">
+                                                                <div className={`text-xs font-bold truncate transition-all ${tx.isPaid ? 'line-through text-slate-400' : 'text-slate-800 dark:text-slate-200'}`}>
+                                                                    {tx.sub}
+                                                                </div>
+                                                                <div className="text-[9px] text-slate-500 dark:text-slate-500 font-medium truncate uppercase tracking-tighter">
+                                                                    {tx.category} • {tx.date}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Right: Amount & Toggle */}
+                                                        <div className="flex items-center gap-4 ml-2">
+                                                            <div className="text-right pointer-events-auto" onClick={() => setEditingTx(tx)}>
+                                                                <div className={`font-mono font-bold text-sm transition-all ${tx.isPaid ? 'text-slate-300' : 'text-slate-900 dark:text-white'}`}>
+                                                                    ${tx.amount.toFixed(2)}
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); togglePaid(tx.id); }}
+                                                                className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full transition-all active:scale-75 ${tx.isPaid ? 'text-green-500 bg-green-50 dark:bg-green-900/20' : 'text-slate-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/10'}`}
+                                                                aria-label={tx.isPaid ? "Marcar como pendiente" : "Marcar como pagado"}
+                                                            >
+                                                                {tx.isPaid ? <CheckCircle2 size={24} className="fill-green-100 dark:fill-green-900/30" /> : <div className="w-6 h-6 rounded-full border-2 border-current" />}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
 
