@@ -18,8 +18,10 @@ export default async function handler(
 ) {
     if (req.method === 'GET') {
         try {
-            let categories = await prisma.category.findMany();
-            if (categories.length === 0) {
+            // First check if any categories exist (even deleted ones) to decide seeding
+            const totalCount = await prisma.category.count();
+
+            if (totalCount === 0) {
                 // Seed if empty
                 for (const cat of INITIAL_CATEGORIES) {
                     await prisma.category.create({
@@ -31,8 +33,12 @@ export default async function handler(
                         }
                     });
                 }
-                categories = await prisma.category.findMany();
             }
+
+            // Fetch only non-deleted
+            const categories = await prisma.category.findMany({
+                where: { deletedAt: null }
+            });
 
             const parsed = categories.map(c => ({
                 ...c,
@@ -54,14 +60,41 @@ export default async function handler(
                     subs: JSON.stringify(subs || [])
                 }
             });
+
+            await prisma.auditLog.create({
+                data: {
+                    action: 'CREATE',
+                    entity: 'Category',
+                    entityId: newCat.id,
+                    details: JSON.stringify({ name, color })
+                }
+            });
+
             res.status(201).json({ ...newCat, subs: JSON.parse(newCat.subs) });
         } catch (e) {
             res.status(500).json({ error: 'Creation failed' });
         }
     } else if (req.method === 'DELETE') {
         const { id } = req.query;
+        if (!id) return res.status(400).json({ error: 'Missing ID' });
+
+        const idStr = Array.isArray(id) ? id[0] : id;
+
         try {
-            await prisma.category.delete({ where: { id: String(id) } });
+            // Soft Delete
+            await prisma.category.update({
+                where: { id: idStr },
+                data: { deletedAt: new Date() }
+            });
+
+            await prisma.auditLog.create({
+                data: {
+                    action: 'DELETE',
+                    entity: 'Category',
+                    entityId: idStr,
+                    details: 'Soft deleted via API'
+                }
+            });
             res.status(200).json({ success: true });
         } catch (e) {
             res.status(500).json({ error: 'Delete failed' });
@@ -79,6 +112,16 @@ export default async function handler(
                     color
                 }
             });
+
+            await prisma.auditLog.create({
+                data: {
+                    action: 'UPDATE',
+                    entity: 'Category',
+                    entityId: id,
+                    details: JSON.stringify({ name, subs: subs?.length })
+                }
+            });
+
             res.status(200).json({ ...updated, subs: JSON.parse(updated.subs) });
         } catch (e) {
             res.status(500).json({ error: 'Update failed' });

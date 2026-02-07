@@ -17,10 +17,8 @@ const getWeekRangeStr = (date: Date) => {
     start.setHours(0, 0, 0, 0);
     const end = new Date(new Date(start).setDate(start.getDate() + 6));
     end.setHours(23, 59, 59, 999);
-
-    const months = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-    const fmt = (dt: Date) => `${dt.getDate()} ${months[dt.getMonth()]}`;
-    return `${fmt(start)} - ${fmt(end)}`;
+    const opts: any = { month: 'short', day: 'numeric' };
+    return `${start.toLocaleDateString('es-ES', opts)} - ${end.toLocaleDateString('es-ES', opts)}`;
 };
 
 export default async function handler(
@@ -30,6 +28,7 @@ export default async function handler(
     if (req.method === 'GET') {
         try {
             const transactions = await prisma.transaction.findMany({
+                where: { deletedAt: null },
                 orderBy: { date: 'desc' }
             });
             // Convert Decimal to number for frontend
@@ -57,6 +56,16 @@ export default async function handler(
                     isPaid: isPaid || false
                 },
             });
+
+            await prisma.auditLog.create({
+                data: {
+                    action: 'CREATE',
+                    entity: 'Transaction',
+                    entityId: newTx.id.toString(),
+                    details: JSON.stringify({ amount, category, date: dateObj })
+                }
+            });
+
             res.status(201).json({ ...newTx, amount: Number(newTx.amount) });
         } catch (error) {
             console.error(error);
@@ -65,9 +74,21 @@ export default async function handler(
     } else if (req.method === 'DELETE') {
         const { id } = req.query;
         try {
-            await prisma.transaction.delete({
+            // Soft Delete
+            await prisma.transaction.update({
                 where: { id: Number(id) },
+                data: { deletedAt: new Date() }
             });
+
+            await prisma.auditLog.create({
+                data: {
+                    action: 'DELETE',
+                    entity: 'Transaction',
+                    entityId: id.toString(),
+                    details: 'Soft deleted via API'
+                }
+            });
+
             res.status(200).json({ success: true });
         } catch (error) {
             res.status(500).json({ error: 'Failed to delete transaction' });
@@ -91,6 +112,16 @@ export default async function handler(
                     week: weekStr
                 },
             });
+
+            await prisma.auditLog.create({
+                data: {
+                    action: 'UPDATE',
+                    entity: 'Transaction',
+                    entityId: id.toString(),
+                    details: JSON.stringify({ amount, category })
+                }
+            });
+
             res.status(200).json({ ...updatedTx, amount: Number(updatedTx.amount) });
         } catch (error) {
             res.status(500).json({ error: 'Failed to update transaction' });

@@ -2,4 +2,14 @@ node_modules
 # Keep environment variables out of version control
 .env
 
+# Build outputs
+.next
+dist
+out
+
+# Database
+*.db
+*.db-journal
+db-data
 /generated/prisma
+

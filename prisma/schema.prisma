@@ -20,6 +20,7 @@ model Transaction {
   isPaid      Boolean  @default(false)
   week        String   // YYYY-WW format
   createdAt   DateTime @default(now())
+  deletedAt   DateTime?
 }
 
 model Recurring {
@@ -28,6 +29,7 @@ model Recurring {
   name    String
   amount  Float
   owner   String  // 'Daniel' | 'Gedalya' | 'Ambos'
+  deletedAt DateTime?
 }
 
 model Category {
@@ -36,4 +38,14 @@ model Category {
   iconKey String
   color   String
   subs    String   // JSON string of subcategories
+  deletedAt DateTime?
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  action    String   // 'CREATE', 'UPDATE', 'DELETE', 'RESTORE'
+  entity    String   // Name of the table
+  entityId  String   // ID of the affected record (converted to string)
+  details   String?  // Optional JSON details
+  createdAt DateTime @default(now())
 }

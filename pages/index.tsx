@@ -58,7 +58,13 @@ interface Transaction {
 // ==========================================
 
 const safeDate = (dateStr: string) => {
-    try { return new Date(dateStr + 'T00:00:00'); } catch (e) { return new Date(); }
+    try {
+        if (!dateStr) return new Date();
+        // If it already has time info or is a full ISO, parse it directly
+        if (dateStr.includes('T')) return new Date(dateStr);
+        // Otherwise assume YYYY-MM-DD and add time to avoid TZ shifts
+        return new Date(dateStr + 'T00:00:00');
+    } catch (e) { return new Date(); }
 };
 
 const getWeekRange = (date: Date) => {
@@ -133,13 +139,7 @@ const COLORS_LIB = [
 
 const OWNERS = ['Daniel', 'Gedalya', 'Ambos'];
 
-const AI_PROMPT = `Actúa como contador. Analiza la imagen. Genera CSV: date,category,subcategory,amount,notes.
-Reglas:
-- date: YYYY-MM-DD
-- category: Personal Daniel, Personal Gedalya, Personal Ambos, Supermercado, Servicios, Automóvil, Salud, Tarjeta Crédito.
-- subcategory: Nombre del comercio.
-- amount: Decimales.
-Devuelve SOLO el bloque CSV.`;
+
 // --- CALENDAR COMPONENT ---
 const DatePicker = ({ value, onChange, onClose }: { value: string, onChange: (date: string) => void, onClose: () => void }) => {
     // Initial view neutralizing TZ to ensure YYYY-MM-DD shows the correct local month
@@ -200,7 +200,13 @@ const mapApiToLocal = (tx: any): Transaction => {
     const d = tx.date ? new Date(tx.date) : new Date();
     // Neutralize TZ from database (UTC) to local
     const localDate = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-    return { ...tx, date: localDate.toISOString().split('T')[0] };
+    const dateStr = localDate.toISOString().split('T')[0];
+
+    // Always normalize week format based on the date to ensure UI matching
+    const range = getWeekRange(localDate);
+    const weekStr = formatDateRange(range.start, range.end).trim();
+
+    return { ...tx, date: dateStr, week: weekStr };
 };
 
 const TxItem = ({ tx, cat, onClick }: { tx: Transaction, cat: any, onClick: () => void }) => (
@@ -243,6 +249,7 @@ export default function App() {
     // Filtro de Pantalla Movimientos
     const [listGroupMode, setListGroupMode] = useState<'week' | 'category'>('week');
     const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
+    const [expandedInnerGroups, setExpandedInnerGroups] = useState<string[]>([]);
 
     // Filtro de Recurrentes (Fijos)
     const [recurringTab, setRecurringTab] = useState('all');
@@ -258,7 +265,7 @@ export default function App() {
     const [inputModal, setInputModal] = useState<{ open: boolean, title: string, placeholder: string, value: string, catId: string } | null>(null);
     const [showListHelp, setShowListHelp] = useState(false);
     const [showHeader, setShowHeader] = useState(true);
-    const [settingsTab, setSettingsTab] = useState<'menu' | 'themes' | 'import' | 'categories'>('menu');
+    const [settingsTab, setSettingsTab] = useState<'menu' | 'themes' | 'import' | 'categories' | 'info'>('menu');
 
     useEffect(() => {
         const timer = setTimeout(() => setShowHeader(false), 30000);
@@ -304,9 +311,10 @@ export default function App() {
         loadData();
     }, []);
 
-    useEffect(() => {
-        setExpandedGroups([]);
-    }, [listGroupMode, activeTab]);
+    // Removed auto-clear effect to allow chart navigation to persist expansion
+    // useEffect(() => {
+    //     setExpandedGroups([]);
+    // }, [listGroupMode]);
 
     // Detect Keyboard Open
     useEffect(() => {
@@ -618,8 +626,61 @@ export default function App() {
         return { sorted, totalSum };
     };
 
+    const handleBarClick = (catName: string) => {
+        const inView = getFilteredData().filter(t => t.category === catName);
+
+        if (inView.length === 0) {
+            showToast(`Sin movimientos para ${catName}`, 'info');
+            return;
+        }
+
+        // Pick the absolute most recent week for this category in the current view
+        const sorted = [...inView].sort((a, b) => b.date.localeCompare(a.date));
+        const targetWeek = sorted[0].week;  // Removed .trim() here to match exactly with data source if needed, or keep consistent with render
+
+        setActiveTab('list');
+        setListGroupMode('week');
+
+        // Force expansion of the target week AND the target inner category
+        const innerKey = `${targetWeek}-${catName}`;
+        setExpandedGroups(prev => Array.from(new Set([...prev, targetWeek])));
+        setExpandedInnerGroups(prev => Array.from(new Set([...prev, innerKey])));
+
+        // Smooth scroll to target week after UI render
+        setTimeout(() => {
+            const cleanId = targetWeek.replace(/\s+/g, '-');
+            const el = document.getElementById(`group-${cleanId}`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }, 300);
+
+        showToast(`Detalle de ${catName}`, 'info');
+    };
+
     // --- HELPERS ---
-    const copyPrompt = () => { navigator.clipboard.writeText(AI_PROMPT); setIsCopied(true); setTimeout(() => setIsCopied(false), 2000); };
+    const getAiPrompt = () => {
+        const catList = categories.map(c => c.name).join(', ');
+        return `Actúa como un asistente contable experto. Tu tarea es convertir los datos de factura/texto/imagen que te pase a formato CSV para importación masiva.
+
+FORMATO OBLIGATORIO (CSV sin encabezados):
+YYYY-MM-DD, Categoría Exacta, Subcategoría, Monto, Notas
+
+REGLAS CRÍTICAS:
+1. Fecha: Formato ISO (YYYY-MM-DD).
+2. Categoría: DEBE ser EXACTAMENTE una de las siguientes: ${catList}.
+3. Subcategoría: Nombre del comercio o detalle corto.
+4. Monto: Solo números y punto decimal (ej: 10.50).
+5. Notas: Breve descripción opcional.
+
+Ejemplo:
+2026-02-20, Supermercado, Walmart, 45.00, Compra semanal
+2026-02-21, Automóvil, Gasolina, 20.00, Llenado tanque
+
+Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
+    };
+
+    const copyPrompt = () => { navigator.clipboard.writeText(getAiPrompt()); setIsCopied(true); setTimeout(() => setIsCopied(false), 2000); };
 
     const handleBulkImport = async () => {
         if (!csvText) return;
@@ -635,12 +696,16 @@ export default function App() {
                     continue;
                 }
 
+                // Check for potential markdown code block artifacts
+                if (line.startsWith('```') || line.startsWith('CSV')) continue;
+
                 const [dateStr, catRaw, sub, amt, nts] = parts;
                 const parseDate = new Date(dateStr);
                 const parseAmount = parseFloat(amt);
 
-                // Normalización de categoría basic
-                const cat = catRaw; // Simplified for now
+                // Normalización de categoría: Buscar coincidencia exacta o usar la primera
+                const matchedCat = categories.find(c => c.name.toLowerCase() === catRaw.toLowerCase());
+                const cat = matchedCat ? matchedCat.name : catRaw;
 
                 if (isNaN(parseDate.getTime()) || isNaN(parseAmount)) {
                     errorCount++;
@@ -787,22 +852,28 @@ export default function App() {
         });
     };
 
-    const BarChart = ({ data }: { data: any[] }) => {
+    const BarChart = ({ data, onBarClick }: { data: any[], onBarClick?: (name: string) => void }) => {
         if (data.length === 0) return <div className="text-center text-slate-400 py-8 text-xs italic">Sin datos</div>;
         const maxVal = Math.max(...data.map(i => i.val));
         return (
-            <div className="space-y-3 mt-4">
+            <div className="space-y-4 mt-4">
                 {data.map((item, i) => {
                     const percent = (item.val / maxVal) * 100;
                     const cat = categories.find(c => c.name === item.name) || { color: 'bg-slate-200', iconKey: 'more' };
                     return (
-                        <div key={i} className="group">
-                            <div className="flex justify-between text-xs mb-1">
-                                <div className="flex items-center gap-1.5"><span className="text-slate-400">{ICON_LIB[cat.iconKey]}</span><span className="font-bold text-slate-700 dark:text-slate-300">{item.name}</span></div>
-                                <span className="font-mono font-bold dark:text-white">${item.val.toFixed(2)}</span>
+                        <div key={i} className="group cursor-pointer active:scale-[0.98] transition-transform" onClick={() => onBarClick?.(item.name)}>
+                            <div className="flex justify-between text-xs mb-1.5">
+                                <div className="flex items-center gap-2">
+                                    <div className={`p-1.5 rounded-lg ${cat.color.split(' ')[0]} ${cat.color.split(' ')[1]} bg-opacity-10`}>{ICON_LIB[cat.iconKey]}</div>
+                                    <span className="font-bold text-slate-700 dark:text-slate-300">{item.name}</span>
+                                </div>
+                                <div className="text-right">
+                                    <div className="font-mono font-black dark:text-white">${item.val.toFixed(2)}</div>
+                                    <div className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">Ver detalles →</div>
+                                </div>
                             </div>
                             <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full transition-all duration-500 dynamic-bar ${cat.color.split(' ')[0]}`} style={{ '--progress-width': `${percent}%` } as React.CSSProperties}></div>
+                                <div className={`h-full rounded-full transition-all duration-700 ease-out dynamic-bar ${cat.color.split(' ')[0]}`} style={{ '--progress-width': `${percent}%` } as React.CSSProperties}></div>
                             </div>
                         </div>
                     )
@@ -862,17 +933,50 @@ export default function App() {
                     {activeTab === 'dashboard' && (
                         <div className="pt-4 px-4 pb-6 space-y-6 animate-in fade-in">
                             <div className="flex flex-col gap-3">
-                                <div className="bg-slate-200 dark:bg-slate-800 rounded-full flex font-bold text-xs relative overflow-hidden">{['week', 'month', 'year'].map(filter => (<button key={filter} onClick={() => { setDashFilter(filter); setViewDate(new Date()); }} aria-label={`Filtrar por ${filter === 'week' ? 'Semana' : filter === 'month' ? 'Mes' : 'Año'}`} title={`Ver por ${filter === 'week' ? 'semana' : filter === 'month' ? 'mes' : 'año'}`} className={`flex-1 py-2.5 transition-all capitalize ${dashFilter === filter ? 'bg-white dark:bg-slate-700 text-black dark:text-white shadow-sm' : 'text-slate-500'}`}>{filter === 'week' ? 'Semana' : filter === 'month' ? 'Mes' : 'Año'}</button>))}</div>
+                                <div className="bg-slate-200 dark:bg-slate-800 rounded-full flex font-bold text-xs relative overflow-hidden">
+                                    {['week', 'month', 'year'].map(filter => (
+                                        <button
+                                            key={filter}
+                                            onClick={() => setDashFilter(filter as any)}
+                                            aria-label={`Filtrar por ${filter === 'week' ? 'Semana' : filter === 'month' ? 'Mes' : 'Año'}`}
+                                            title={`Ver por ${filter === 'week' ? 'semana' : filter === 'month' ? 'mes' : 'año'}`}
+                                            className={`flex-1 py-2.5 transition-all outline-none capitalize ${dashFilter === filter ? 'bg-white dark:bg-slate-700 text-black dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-600 dark:hover:text-slate-400'}`}
+                                        >
+                                            {filter === 'week' ? 'Semana' : filter === 'month' ? 'Mes' : 'Año'}
+                                        </button>
+                                    ))}
+                                </div>
                                 <div className="flex items-center justify-between bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-100 dark:border-slate-800"><button onClick={() => navigateTime(-1)} aria-label="Anterior" title="Anterior" className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500"><ChevronLeft size={20} /></button><span className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">{getTimeLabel()}</span><button onClick={() => navigateTime(1)} aria-label="Siguiente" title="Siguiente" className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500"><ChevronRight size={20} /></button></div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-center items-center h-full">
-                                    <span className="text-xs text-slate-400 uppercase font-bold tracking-widest mb-2">Total Gastado (TC)</span>
-                                    <div className="text-5xl font-black text-slate-800 dark:text-white">${getChartData().totalSum.toFixed(2)}</div>
-                                </div>
+                                {(() => {
+                                    const now = new Date();
+                                    const isPresent = dashFilter === 'year'
+                                        ? viewDate.getFullYear() === now.getFullYear()
+                                        : dashFilter === 'month'
+                                            ? viewDate.getMonth() === now.getMonth() && viewDate.getFullYear() === now.getFullYear()
+                                            : getWeekRange(viewDate).start.getTime() === getWeekRange(now).start.getTime();
+
+                                    return (
+                                        <div className={`bg-white dark:bg-slate-900 p-6 rounded-3xl border shadow-sm flex flex-col justify-center items-center h-full group transition-all duration-500 ${isPresent ? 'border-blue-100 dark:border-blue-900/30' : 'border-amber-100 dark:border-amber-900/30'}`}>
+                                            <span className="text-[10px] text-slate-400 uppercase font-black tracking-[0.2em] mb-2 opacity-70">
+                                                Total Gastado ({dashFilter === 'week' ? 'Semana' : dashFilter === 'month' ? 'Mes' : 'Año'})
+                                            </span>
+                                            <div className="text-5xl font-black text-slate-800 dark:text-white tracking-tighter hover:scale-105 transition-transform duration-500 cursor-default">
+                                                ${getChartData().totalSum.toFixed(2)}
+                                            </div>
+                                            <div className={`mt-3 text-[9px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full border shadow-sm animate-in fade-in zoom-in-90 duration-700 ${isPresent
+                                                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-800/50'
+                                                : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-800/50'
+                                                }`}>
+                                                {isPresent ? 'Período Actual' : 'Consulta Histórica'}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                                 <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm col-span-1 lg:col-span-2">
                                     <h3 className="font-bold text-sm text-slate-800 dark:text-white flex items-center gap-2 mb-4"><BarChart3 size={16} className="text-blue-500" /> Desglose por Categoría</h3>
-                                    <BarChart data={getChartData().sorted} />
+                                    <BarChart data={getChartData().sorted} onBarClick={handleBarClick} />
                                 </div>
                             </div>
                         </div>
@@ -965,7 +1069,13 @@ export default function App() {
                             )}
 
                             {Array.from(new Set(transactions.map(t => listGroupMode === 'week' ? t.week : t.category)))
-                                .sort((a, b) => listGroupMode === 'week' ? b.localeCompare(a) : a.localeCompare(b))
+                                .sort((a, b) => {
+                                    if (listGroupMode === 'category') return a.localeCompare(b);
+                                    // Chronological sort for weeks (newer first)
+                                    const dateA = transactions.find(t => t.week === a)?.date || '';
+                                    const dateB = transactions.find(t => t.week === b)?.date || '';
+                                    return dateB.localeCompare(dateA);
+                                })
                                 .map(groupKey => {
                                     const groupTxs = transactions.filter(t => (listGroupMode === 'week' ? t.week : t.category) === groupKey);
                                     const groupTotal = groupTxs.reduce((acc, t) => acc + t.amount, 0);
@@ -974,7 +1084,7 @@ export default function App() {
                                     const allPaid = groupTxs.every(t => t.isPaid);
 
                                     return (
-                                        <div key={groupKey} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm transition-all">
+                                        <div key={groupKey} id={`group-${groupKey.replace(/\s+/g, '-')}`} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm transition-all">
                                             <div className="flex items-center bg-slate-50 dark:bg-slate-800/50">
                                                 <div
                                                     onClick={() => setExpandedGroups(prev => isExpanded ? prev.filter(k => k !== groupKey) : [...prev, groupKey])}
@@ -1008,10 +1118,17 @@ export default function App() {
                                                             const catTotal = catTxs.reduce((acc, t) => acc + t.amount, 0);
                                                             const cInfo = categories.find(c => c.name === catName);
                                                             const catAllPaid = catTxs.every(t => t.isPaid);
+                                                            const innerKey = `${groupKey}-${catName}`;
+                                                            const isInnerExpanded = expandedInnerGroups.includes(innerKey);
+
                                                             return (
                                                                 <div key={catName} className="bg-white dark:bg-slate-950/20">
-                                                                    <div className="px-4 py-2 bg-slate-50/50 dark:bg-slate-900/50 flex justify-between items-center border-b border-slate-50 dark:border-slate-800">
+                                                                    <div
+                                                                        onClick={() => setExpandedInnerGroups(prev => isInnerExpanded ? prev.filter(k => k !== innerKey) : [...prev, innerKey])}
+                                                                        className="px-4 py-2 bg-slate-50/50 dark:bg-slate-900/50 flex justify-between items-center border-b border-slate-50 dark:border-slate-800 cursor-pointer active:bg-slate-100/50 transition-colors"
+                                                                    >
                                                                         <div className="flex items-center gap-2">
+                                                                            <ChevronRight size={12} className={`text-slate-400 transition-transform ${isInnerExpanded ? 'rotate-90' : ''}`} />
                                                                             {cInfo && <span className="scale-75 opacity-70">{ICON_LIB[cInfo.iconKey]}</span>}
                                                                             <span className="text-[10px] font-bold text-slate-500 uppercase">{catName}</span>
                                                                         </div>
@@ -1025,11 +1142,13 @@ export default function App() {
                                                                             </button>
                                                                         </div>
                                                                     </div>
-                                                                    <div className="divide-y divide-slate-50 dark:divide-slate-900">
-                                                                        {catTxs.map(tx => (
-                                                                            <TxItem key={tx.id} tx={tx} cat={cInfo} onClick={() => setEditingTx(tx)} />
-                                                                        ))}
-                                                                    </div>
+                                                                    {isInnerExpanded && (
+                                                                        <div className="divide-y divide-slate-50 dark:divide-slate-900 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                                            {catTxs.map(tx => (
+                                                                                <TxItem key={tx.id} tx={tx} cat={cInfo} onClick={() => setEditingTx(tx)} />
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             );
                                                         })
@@ -1104,11 +1223,27 @@ export default function App() {
                                         </div>
                                         <ChevronRight size={20} className="text-slate-300" />
                                     </button>
+
+                                    <button onClick={() => setSettingsTab('info')} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-between group shadow-sm">
+                                        <div className="flex items-center gap-4">
+                                            <div className="p-3 bg-slate-50 dark:bg-slate-800 text-slate-600 rounded-xl group-hover:scale-110 transition-transform">
+                                                <AlertCircle size={24} />
+                                            </div>
+                                            <div className="text-left">
+                                                <div className="font-bold text-sm dark:text-white">Información</div>
+                                                <div className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Sobre la App</div>
+                                            </div>
+                                        </div>
+                                        <ChevronRight size={20} className="text-slate-300" />
+                                    </button>
                                 </div>
                             )}
 
                             {settingsTab === 'themes' && (
                                 <div className="space-y-4">
+                                    <button onClick={() => setSettingsTab('menu')} className="flex items-center gap-2 text-xs font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-4 py-2 rounded-full w-fit active:scale-95 transition-transform mb-2">
+                                        <ChevronLeft size={16} /> Volver a Ajustes
+                                    </button>
                                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Seleccionar Tema</h3>
                                     <div className="flex flex-col gap-3">
                                         <button
@@ -1136,7 +1271,10 @@ export default function App() {
                             )}
 
                             {settingsTab === 'categories' && (
-                                <div className="animate-in fade-in">
+                                <div className="animate-in fade-in space-y-4">
+                                    <button onClick={() => setSettingsTab('menu')} className="flex items-center gap-2 text-xs font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-4 py-2 rounded-full w-fit active:scale-95 transition-transform mb-2">
+                                        <ChevronLeft size={16} /> Volver a Ajustes
+                                    </button>
                                     <button onClick={() => setEditingCategory({ id: '', name: '', iconKey: 'home', color: 'bg-slate-100 text-slate-600', subs: [] })} className="fixed bottom-24 right-4 z-50 bg-blue-600 text-white p-4 rounded-full shadow-2xl shadow-blue-500/30 active:scale-95 transition-transform" aria-label="Nueva Categoría">
                                         <Plus size={24} strokeWidth={3} />
                                     </button>
@@ -1174,6 +1312,52 @@ export default function App() {
                                     </div>
                                 </div>
                             )}
+
+                            {settingsTab === 'info' && (
+                                <div className="space-y-4">
+                                    <button onClick={() => setSettingsTab('menu')} className="flex items-center gap-2 text-xs font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-4 py-2 rounded-full w-fit active:scale-95 transition-transform">
+                                        <ChevronLeft size={16} /> Volver a Ajustes
+                                    </button>
+
+                                    <div className="flex flex-col items-center justify-center space-y-8 bg-white dark:bg-slate-900 rounded-[2.5rem] p-10 py-12 border border-slate-100 dark:border-slate-800 shadow-xl animate-in zoom-in-95 duration-500">
+                                        <div className="relative group">
+                                            <div className="absolute inset-x-[-20%] inset-y-[-20%] bg-blue-500 blur-3xl opacity-20 group-hover:opacity-40 transition-opacity duration-1000"></div>
+                                            <div className="bg-white dark:bg-slate-800 p-2 rounded-[2.5rem] shadow-2xl relative z-10 border-4 border-slate-50 dark:border-slate-700 overflow-hidden w-24 h-24 flex items-center justify-center translate-y-0 group-hover:-translate-y-2 transition-transform duration-500">
+                                                <img src="/logo.svg" alt="App Logo" className="w-16 h-16 object-contain" />
+                                            </div>
+                                        </div>
+
+                                        <div className="text-center space-y-2">
+                                            <h3 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight">Finanzas Vásquez</h3>
+                                            <div className="flex items-center justify-center gap-2">
+                                                <span className="h-px w-8 bg-slate-200 dark:bg-slate-700"></span>
+                                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em]">Smart Wallets Pro</p>
+                                                <span className="h-px w-8 bg-slate-200 dark:bg-slate-700"></span>
+                                            </div>
+                                        </div>
+
+                                        <div className="w-full flex flex-col items-center gap-4">
+                                            <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-3xl w-full text-center border border-slate-100 dark:border-slate-800 backdrop-blur-sm relative overflow-hidden group/card">
+                                                <div className="absolute top-0 right-0 p-2 opacity-10 group-hover/card:opacity-30 transition-opacity">
+                                                    <Heart size={40} className="text-blue-500" />
+                                                </div>
+                                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2 opacity-60">Creado con ❤️ por</p>
+                                                <p className="text-xl font-black bg-gradient-to-r from-blue-600 to-indigo-500 text-transparent bg-clip-text">Daniel Vásquez</p>
+                                                <p className="text-[9px] text-blue-500 dark:text-blue-400 mt-3 font-black uppercase tracking-tighter">Vibe Coding Profesional</p>
+                                            </div>
+
+                                            <div className="flex gap-2">
+                                                <div className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-full flex items-center gap-2 border border-red-100 dark:border-red-900/50">
+                                                    <Heart size={12} className="fill-current" />
+                                                    <span className="text-[9px] font-black uppercase tracking-tight">Premium v2.1</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-[9px] text-slate-300 dark:text-slate-600 font-bold uppercase pt-2">© 2026 Daniel Vásquez. Code with Vibe.</p>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -1206,7 +1390,7 @@ export default function App() {
                     <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center animate-in fade-in">
                         <div className="bg-white dark:bg-slate-900 w-full sm:w-[90%] rounded-t-3xl sm:rounded-3xl p-6 h-[85vh] sm:h-auto flex flex-col animate-in slide-in-from-bottom-10">
                             <div className="flex justify-between items-center mb-4"><h2 className="font-bold text-lg dark:text-white flex items-center gap-2"><UploadCloud className="text-blue-500" /> Importador IA</h2><button onClick={() => setShowBulkModal(false)} aria-label="Cerrar importador" title="Cerrar ventana"><X className="dark:text-white" /></button></div>
-                            <div className="flex-1 overflow-y-auto space-y-4"><div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-3xl border border-indigo-100 dark:border-indigo-800"><div className="flex justify-between items-start mb-2"><label className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase">1. Prompt</label><button onClick={copyPrompt} aria-label="Copiar prompt IA" title="Copiar al portapapeles" className={`text-xs px-3 py-1.5 rounded-full font-bold ${isCopied ? 'bg-green-500 text-white' : 'bg-indigo-200 dark:bg-indigo-800 text-indigo-700'}`}>{isCopied ? '¡Copiado!' : 'Copiar'}</button></div><p className="font-mono text-[10px] text-slate-600 dark:text-slate-300 p-2 bg-white dark:bg-slate-950 rounded border border-indigo-100 dark:border-indigo-900/50">{AI_PROMPT}</p></div><div><label htmlFor="csv-input" className="text-xs font-bold text-slate-400 uppercase mb-2 block">2. Pegar CSV</label><textarea id="csv-input" value={csvText} onChange={(e) => setCsvText(e.target.value)} title="Entrada de datos CSV" className="w-full h-32 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-[2rem] p-4 text-xs font-mono dark:text-white" placeholder="Pegar aquí..."></textarea></div><button onClick={handleBulkImport} aria-label="Procesar datos pegados" title="Ejecutar importación" className="w-full py-4 bg-blue-600 text-white font-bold rounded-full">Procesar</button></div>
+                            <div className="flex-1 overflow-y-auto space-y-4"><div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-3xl border border-indigo-100 dark:border-indigo-800"><div className="flex justify-between items-start mb-2"><label className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase">1. Prompt</label><button onClick={copyPrompt} aria-label="Copiar prompt IA" title="Copiar al portapapeles" className={`text-xs px-3 py-1.5 rounded-full font-bold ${isCopied ? 'bg-green-500 text-white' : 'bg-indigo-200 dark:bg-indigo-800 text-indigo-700'}`}>{isCopied ? '¡Copiado!' : 'Copiar'}</button></div><p className="font-mono text-[10px] text-slate-600 dark:text-slate-300 p-2 bg-white dark:bg-slate-950 rounded border border-indigo-100 dark:border-indigo-900/50 whitespace-pre-wrap">{getAiPrompt()}</p></div><div><label htmlFor="csv-input" className="text-xs font-bold text-slate-400 uppercase mb-2 block">2. Pegar CSV</label><textarea id="csv-input" value={csvText} onChange={(e) => setCsvText(e.target.value)} title="Entrada de datos CSV" className="w-full h-32 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-[2rem] p-4 text-xs font-mono dark:text-white" placeholder="Pegar aquí..."></textarea></div><button onClick={handleBulkImport} aria-label="Procesar datos pegados" title="Ejecutar importación" className="w-full py-4 bg-blue-600 text-white font-bold rounded-full">Procesar</button></div>
                         </div>
                     </div>
                 )}
