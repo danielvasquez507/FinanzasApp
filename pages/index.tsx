@@ -145,7 +145,13 @@ Reglas:
 Devuelve SOLO el bloque CSV.`;
 // --- CALENDAR COMPONENT ---
 const DatePicker = ({ value, onChange, onClose }: { value: string, onChange: (date: string) => void, onClose: () => void }) => {
-    const [viewDate, setViewDate] = useState(value ? new Date(value) : new Date());
+    // Initial view neutralizing TZ to ensure YYYY-MM-DD shows the correct local month
+    const [viewDate, setViewDate] = useState(() => {
+        if (!value) return new Date();
+        const d = new Date(value);
+        d.setMinutes(d.getMinutes() + d.getTimezoneOffset());
+        return d;
+    });
     const year = viewDate.getFullYear();
     const month = viewDate.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -166,7 +172,8 @@ const DatePicker = ({ value, onChange, onClose }: { value: string, onChange: (da
                 {Array.from({ length: firstDay }).map((_, i) => <div key={`empty-${i}`} />)}
                 {Array.from({ length: daysInMonth }).map((_, i) => {
                     const d = i + 1;
-                    const dateStr = new Date(year, month, d).toISOString().split('T')[0];
+                    // Format YYYY-MM-DD manually to avoid TZ shifts
+                    const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
                     const isSelected = value === dateStr;
                     return (
                         <button
