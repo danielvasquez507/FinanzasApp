@@ -3,19 +3,17 @@ version: '3.9'
 services:
   app:
     container_name: finanzas_vasquez
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # Usamos la imagen pre-construida desde GitHub Container Registry
+    # Esto evita construir en el servidor y ahorra espacio/CPU
+    image: ghcr.io/danielvasquez507/finanzas-vasquez:latest
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       # URL absoluta para SQLite dentro del contenedor
-      # Importante: usar file: seguido de la ruta absoluta
       - DATABASE_URL=file:/app/db_data/prod.db
       - NODE_ENV=production
       - NEXT_TELEMETRY_DISABLED=1
-      # Genera un secreto real con `openssl rand -base64 32` para producción
       - NEXTAUTH_SECRET=cambiar_esto_por_secreto_seguro_produccion
     volumes:
       # Persistencia de datos mapeada al host
