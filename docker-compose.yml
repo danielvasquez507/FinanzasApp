@@ -19,4 +19,5 @@ services:
       - NEXTAUTH_SECRET=cambiar_esto_por_secreto_seguro_produccion
     volumes:
       # Persistencia de datos mapeada al host
-      - ./db-data:/app/db_data
+      # Usa DB_VOLUME_PATH si está definido, si no, usa ./db-data localmente
+      - ${DB_VOLUME_PATH:-./db-data}:/app/db_data
