@@ -244,7 +244,7 @@ export default function App() {
             setRecurring(newRecs);
 
             // 2. Try to fetch fresh data if online
-            if (navigator.onLine) {
+            if (dbStatus === 'online') {
                 await processSyncQueue(); // Sync first
 
                 const [txRes, catRes, recRes] = await Promise.all([
@@ -305,8 +305,8 @@ export default function App() {
         };
 
         const handleOffline = () => {
-            showToast("Modo Offline activado", 'info');
             setDbStatus('offline');
+            showToast("Modo Local (Sin conexión al servidor)", 'info');
         };
 
         window.addEventListener('online', handleOnline);
@@ -316,11 +316,7 @@ export default function App() {
             window.removeEventListener('offline', handleOffline);
             clearInterval(interval);
         };
-        window.addEventListener('online', handleOnline);
-        return () => {
-            window.removeEventListener('online', handleOnline);
-            clearInterval(interval);
-        };
+
     }, []);
 
     // Removed auto-clear effect to allow chart navigation to persist expansion
@@ -459,7 +455,7 @@ export default function App() {
         setNotes('');
 
         try {
-            if (navigator.onLine) {
+            if (dbStatus === 'online') {
                 const res = await fetch('/api/transactions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -494,7 +490,7 @@ export default function App() {
                 setEditingTx(null);
 
                 try {
-                    if (navigator.onLine) {
+                    if (dbStatus === 'online') {
                         await fetch(`/api/transactions?id=${id}`, { method: 'DELETE' });
                     } else { throw new Error('Offline'); }
                 } catch (e) {
@@ -522,7 +518,7 @@ export default function App() {
         // Sync
         for (const tx of txsToUpdate) {
             try {
-                if (navigator.onLine) {
+                if (dbStatus === 'online') {
                     await fetch(`/api/transactions?id=${tx.id}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
@@ -571,7 +567,7 @@ export default function App() {
         showToast(newVal ? "Marcado como pagado" : "Marcado como pendiente", 'info');
 
         try {
-            if (navigator.onLine) {
+            if (dbStatus === 'online') {
                 await fetch(`/api/transactions?id=${id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
@@ -619,7 +615,7 @@ export default function App() {
         showToast(editingRecurring ? "Recurrente actualizado" : "Recurrente creado", 'success');
 
         try {
-            if (navigator.onLine) {
+            if (dbStatus === 'online') {
                 const method = editingRecurring ? 'PUT' : 'POST';
                 await fetch('/api/recurring', { method, body: JSON.stringify({ ...payload, updatedBy: currentUser }), headers: { 'Content-Type': 'application/json' } });
             } else { throw new Error('Offline'); }
@@ -645,7 +641,7 @@ export default function App() {
                 showToast("Recurrente eliminado", 'success');
 
                 try {
-                    if (navigator.onLine) {
+                    if (dbStatus === 'online') {
                         await fetch(`/api/recurring?id=${id}&user=${currentUser}`, { method: 'DELETE' });
                     } else { throw new Error('Offline'); }
                 } catch (e) {
@@ -800,7 +796,7 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
 
                 // Sync
                 try {
-                    if (navigator.onLine) {
+                    if (dbStatus === 'online') {
                         const res = await fetch('/api/transactions', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -861,7 +857,7 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
         showToast(isNew ? "Categoría creada" : "Categoría actualizada", 'success');
 
         try {
-            if (navigator.onLine) {
+            if (dbStatus === 'online') {
                 await fetch('/api/categories', {
                     method,
                     headers: { 'Content-Type': 'application/json' },
@@ -888,7 +884,7 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
                 setConfirmModal(null);
 
                 try {
-                    if (navigator.onLine) {
+                    if (dbStatus === 'online') {
                         await fetch(`/api/categories?id=${id}&user=${currentUser}`, { method: 'DELETE' });
                     } else { throw new Error('Offline'); }
                 } catch (e) {
@@ -922,7 +918,7 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
         showToast("Subcategoría agregada", 'success');
 
         try {
-            if (navigator.onLine) {
+            if (dbStatus === 'online') {
                 await fetch('/api/categories', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
@@ -952,7 +948,7 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
                 setConfirmModal(null);
 
                 try {
-                    if (navigator.onLine) {
+                    if (dbStatus === 'online') {
                         await fetch('/api/categories', {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
@@ -996,8 +992,7 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
                         </div>
                         {/* Desktop Nav */}
                         <div className="hidden md:flex items-center gap-1">
-                            {/* DB Status Indicator */}
-                            <div title={dbStatus === 'online' ? 'Base de datos conectada' : 'Modo Offline / Error de conexión'} className={`w-2 h-2 rounded-full mr-2 ${dbStatus === 'online' ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`}></div>
+                            <div title={dbStatus === 'online' ? 'Conectado al Servidor' : 'Modo Local (Sin conexión)'} className={`w-2 h-2 rounded-full mr-2 ${dbStatus === 'online' ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`}></div>
 
                             <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${activeTab === 'dashboard' ? 'bg-slate-100 dark:bg-slate-800 text-blue-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Inicio</button>
                             <button onClick={() => setActiveTab('recurring')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${activeTab === 'recurring' ? 'bg-slate-100 dark:bg-slate-800 text-blue-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Fijos</button>
