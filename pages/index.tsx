@@ -1,6 +1,5 @@
 "use client";
 
-import { processSyncQueue, addToSyncQueue, getSyncQueue, SyncItem } from '@/lib/sync';
 import React, { useState, useEffect } from 'react';
 import {
     Plus, Sun, Moon,
@@ -113,183 +112,26 @@ export default function App() {
     };
 
 
-    // DB Status
-    const [dbStatus, setDbStatus] = useState<'online' | 'offline'>('online');
-    const [isSyncing, setIsSyncing] = useState(false);
-    const [pendingCount, setPendingCount] = useState(0);
-    const [lastDbError, setLastDbError] = useState<string | null>(null);
-    const [lastSyncError, setLastSyncError] = useState<string | null>(null);
-
-    const updatePendingCount = () => {
-        if (typeof window !== 'undefined') {
-            setPendingCount(getSyncQueue().length);
-        }
-    };
-
-    const runSync = async () => {
-        if (isSyncing) return;
-        setIsSyncing(true);
-        try {
-            const synced = await processSyncQueue();
-            if (synced > 0) {
-                showToast(`Sincronizados ${synced} cambios`, 'success');
-                loadData();
-            }
-            updatePendingCount();
-        } catch (e: any) {
-            console.error("Sync error", e);
-            setLastSyncError(e.message || JSON.stringify(e));
-        } finally {
-            setIsSyncing(false);
-        }
-    };
-
-    const checkDbStatus = async () => {
-        try {
-            const res = await fetch('/api/db_status');
-            if (res.ok) {
-                if (dbStatus === 'offline') {
-                    await runSync();
-                }
-                setDbStatus('online');
-                setLastDbError(null); // Clear error on success
-
-                // Check for remote updates
-                if (currentUser) {
-                    const lastSync = localStorage.getItem('last_sync_ts');
-                    const since = lastSync ? new Date(parseInt(lastSync)).toISOString() : new Date(0).toISOString();
-
-                    const updateRes = await fetch(`/api/sync/check?since=${since}&user=${currentUser}`);
-                    if (updateRes.ok) {
-                        const updateData = await updateRes.json();
-                        console.log(`Sync Check: ${updateData.hasUpdates ? 'Updates found' : 'No updates'} from ${updateData.user || 'none'}`);
-                        if (updateData.hasUpdates) {
-                            showToast(`Actualización remota detectada (${updateData.user || 'alguien'})`, 'info');
-                            loadData();
-                        }
-                    }
-                }
-            }
-            else {
-                setDbStatus('offline');
-                setLastDbError(`HTTP Error: ${res.status} ${res.statusText}`);
-            }
-        } catch (e: any) {
-            setDbStatus('offline');
-            setLastDbError(e.message || "Network Error (Fetch Failed)");
-        }
-        updatePendingCount();
-    };
-
-
-
-    const applyQueueToData = (
-        txs: Transaction[],
-        cats: Category[],
-        recs: RecurringItem[],
-        queue: SyncItem[]
-    ) => {
-        let newTxs = [...txs];
-        let newCats = [...cats];
-        let newRecs = [...recs];
-
-        const sortedQueue = [...queue].sort((a, b) => a.timestamp - b.timestamp);
-
-        sortedQueue.forEach(item => {
-            if (item.url.includes('/api/transactions')) {
-                if (item.method === 'POST' && item.body) {
-                    const newItem = mapApiToLocal(item.body);
-                    newTxs.unshift(newItem);
-                } else if (item.method === 'PUT' && item.body) {
-                    newTxs = newTxs.map(t => t.id === item.body.id ? mapApiToLocal(item.body) : t);
-                } else if (item.method === 'DELETE') {
-                    // Extract ID from URL
-                    const idMatch = item.url.match(/id=([^&]+)/);
-                    if (idMatch) newTxs = newTxs.filter(t => t.id !== idMatch[1]);
-                }
-            } else if (item.url.includes('/api/categories')) {
-                if (item.method === 'POST' && item.body) {
-                    newCats.push(item.body);
-                } else if (item.method === 'PUT' && item.body) {
-                    newCats = newCats.map(c => c.id === item.body.id ? item.body : c);
-                } else if (item.method === 'DELETE') {
-                    const idMatch = item.url.match(/id=([^&]+)/);
-                    if (idMatch) newCats = newCats.filter(c => c.id !== idMatch[1]);
-                }
-            } else if (item.url.includes('/api/recurring')) {
-                if (item.method === 'POST' && item.body) {
-                    newRecs.push(item.body);
-                } else if (item.method === 'PUT' && item.body) {
-                    newRecs = newRecs.map(r => r.id === item.body.id ? item.body : r);
-                } else if (item.method === 'DELETE') {
-                    const idMatch = item.url.match(/id=([^&]+)/);
-                    if (idMatch) newRecs = newRecs.filter(r => r.id !== idMatch[1]);
-                }
-            }
-        });
-
-        return { newTxs, newCats, newRecs };
-    };
-
     const loadData = async () => {
         try {
-            updatePendingCount();
+            const [txRes, catRes, recRes] = await Promise.all([
+                fetch('/api/transactions'),
+                fetch('/api/categories'),
+                fetch('/api/recurring')
+            ]);
 
-            // 1. Load from Cache first (Instant render) - REMOVED BY REQUEST
-            // const cachedTxsIdx = localStorage.getItem('cache_transactions');
-            // const cachedCatsIdx = localStorage.getItem('cache_categories');
-            // const cachedRecsIdx = localStorage.getItem('cache_recurring');
+            if (txRes.ok && catRes.ok && recRes.ok) {
+                const fetchedTxs = (await txRes.json()).map(mapApiToLocal);
+                const fetchedCats = await catRes.json();
+                const fetchedRecs = await recRes.json();
 
-            // let loadedTxs: Transaction[] = []; // cachedTxsIdx ? JSON.parse(cachedTxsIdx) : [];
-            // let loadedCats: Category[] = []; // cachedCatsIdx ? JSON.parse(cachedCatsIdx) : [];
-            // let loadedRecs: RecurringItem[] = []; // cachedRecsIdx ? JSON.parse(cachedRecsIdx) : [];
-
-            // Apply queue to cached data
-            // const queue = getSyncQueue();
-            // const { newTxs, newCats, newRecs } = applyQueueToData(loadedTxs, loadedCats, loadedRecs, queue);
-
-            // setTransactions(newTxs);
-            // setCategories(newCats);
-            // setRecurring(newRecs);
-
-            // Just apply queue to empty state initially if we want, or just wait for fetch
-            // For now, initializing empty to comply with "no offline loading" request
-            setTransactions([]);
-            setCategories([]);
-            setRecurring([]);
-
-            // 2. Try to fetch fresh data if online
-            if (dbStatus === 'online') {
-                await processSyncQueue(); // Sync first
-
-                const [txRes, catRes, recRes] = await Promise.all([
-                    fetch('/api/transactions'),
-                    fetch('/api/categories'),
-                    fetch('/api/recurring')
-                ]);
-
-                if (txRes.ok && catRes.ok && recRes.ok) {
-                    const fetchedTxs = (await txRes.json()).map(mapApiToLocal);
-                    const fetchedCats = await catRes.json();
-                    const fetchedRecs = await recRes.json();
-
-                    // Save to cache
-                    localStorage.setItem('cache_transactions', JSON.stringify(fetchedTxs));
-                    localStorage.setItem('cache_categories', JSON.stringify(fetchedCats));
-                    localStorage.setItem('cache_recurring', JSON.stringify(fetchedRecs));
-                    localStorage.setItem('last_sync_ts', Date.now().toString());
-
-                    // Re-apply queue (in case new items were added while fetching)
-                    const currentQueue = getSyncQueue();
-                    const { newTxs: finalTxs, newCats: finalCats, newRecs: finalRecs } = applyQueueToData(fetchedTxs, fetchedCats, fetchedRecs, currentQueue);
-
-                    setTransactions(finalTxs);
-                    setCategories(finalCats);
-                    setRecurring(finalRecs);
-                }
+                setTransactions(fetchedTxs);
+                setCategories(fetchedCats);
+                setRecurring(fetchedRecs);
             }
         } catch (e) {
             console.error("Error loading data", e);
+            showToast("Error conectando con el servidor", 'error');
         }
     };
 
@@ -300,38 +142,7 @@ export default function App() {
 
 
     useEffect(() => {
-        const init = async () => {
-            await loadData();
-            await checkDbStatus();
-            await runSync();
-        };
-        init();
-
-        const interval = setInterval(() => {
-            checkDbStatus();
-        }, 15000); // Check every 15s
-
-        // Online status listener
-        const handleOnline = async () => {
-            showToast("Conexión restaurada. Sincronizando...", 'info');
-            await runSync();
-            checkDbStatus(); // Immediately verify DB connection
-            loadData();
-        };
-
-        const handleOffline = () => {
-            setDbStatus('offline');
-            showToast("Modo Local (Sin conexión al servidor)", 'info');
-        };
-
-        window.addEventListener('online', handleOnline);
-        window.addEventListener('offline', handleOffline);
-        return () => {
-            window.removeEventListener('online', handleOnline);
-            window.removeEventListener('offline', handleOffline);
-            clearInterval(interval);
-        };
-
+        loadData();
     }, []);
 
     // Removed auto-clear effect to allow chart navigation to persist expansion
@@ -468,24 +279,24 @@ export default function App() {
         setAmount('');
         setSubCat('');
         setNotes('');
-
         try {
             const res = await fetch('/api/transactions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+                body: JSON.stringify(payload)
             });
-            if (!res.ok) throw new Error('API Error');
-            showToast("Gasto guardado", 'success');
+
+            if (res.ok) {
+                const saved = await res.json();
+                setTransactions([mapApiToLocal(saved), ...transactions]);
+                showToast("Gasto guardado", 'success');
+                setAmount(''); setSelectedCat(null); setSubCat(''); setNotes('');
+            } else {
+                showToast("Error al guardar", 'error');
+            }
         } catch (e) {
-            addToSyncQueue({
-                id: tempId,
-                url: '/api/transactions',
-                method: 'POST',
-                body: payload
-            });
-            showToast("Guardado (Pendiente de sinc.)", 'info');
-            updatePendingCount();
+            console.error(e);
+            showToast("Error de conexión", 'error');
         }
     };
 
@@ -503,8 +314,8 @@ export default function App() {
                 try {
                     await fetch(`/api/transactions?id=${id}`, { method: 'DELETE' });
                 } catch (e) {
-                    addToSyncQueue({ id, url: `/api/transactions?id=${id}`, method: 'DELETE' });
-                    updatePendingCount();
+                    console.error("Error deleting", e);
+                    showToast("Error de conexión", 'error');
                 }
             }
         });
@@ -534,13 +345,8 @@ export default function App() {
                     body: JSON.stringify({ ...tx, isPaid: targetState })
                 });
             } catch (e) {
-                addToSyncQueue({
-                    id: tx.id,
-                    url: `/api/transactions?id=${tx.id}`,
-                    method: 'PUT',
-                    body: { ...tx, isPaid: targetState, updatedBy: currentUser }
-                });
-                updatePendingCount();
+                console.error("Error bulk updating", e);
+                showToast("Error de conexión al actualizar en grupo", 'error');
             }
         }
     };
@@ -559,6 +365,8 @@ export default function App() {
                 setTransactions(transactions.map(t => t.id === editingTx.id ? mapApiToLocal(updated) : t));
                 setEditingTx(null);
                 showToast("Gasto actualizado", 'success');
+            } else {
+                showToast("Error al actualizar", 'error');
             }
         } catch (e) {
             console.error(e);
@@ -582,13 +390,8 @@ export default function App() {
                 body: JSON.stringify({ ...tx, isPaid: newVal, updatedBy: currentUser })
             });
         } catch (e) {
-            addToSyncQueue({
-                id,
-                url: `/api/transactions?id=${id}`,
-                method: 'PUT',
-                body: { ...tx, isPaid: newVal }
-            });
-            updatePendingCount();
+            console.error("Error toggling paid", e);
+            showToast("Error de conexión al cambiar estado", 'error');
         }
     };
 
@@ -624,15 +427,11 @@ export default function App() {
 
         try {
             const method = editingRecurring ? 'PUT' : 'POST';
-            await fetch('/api/recurring', { method, body: JSON.stringify({ ...payload, updatedBy: currentUser }), headers: { 'Content-Type': 'application/json' } });
+            const res = await fetch('/api/recurring', { method, body: JSON.stringify({ ...payload, updatedBy: currentUser }), headers: { 'Content-Type': 'application/json' } });
+            if (!res.ok) throw new Error('API Error');
         } catch (e) {
-            addToSyncQueue({
-                id: tempId,
-                url: '/api/recurring',
-                method: editingRecurring ? 'PUT' : 'POST',
-                body: { ...payload, updatedBy: currentUser }
-            });
-            updatePendingCount();
+            console.error("Error saving recurring", e);
+            showToast("Error de conexión", 'error');
         }
     };
 
@@ -650,8 +449,8 @@ export default function App() {
                 try {
                     await fetch(`/api/recurring?id=${id}&user=${currentUser}`, { method: 'DELETE' });
                 } catch (e) {
-                    addToSyncQueue({ id, url: `/api/recurring?id=${id}&user=${currentUser}`, method: 'DELETE' });
-                    updatePendingCount();
+                    console.error("Error deleting", e);
+                    showToast("Error de conexión", 'error');
                 }
             }
         });
@@ -781,9 +580,7 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
                     continue;
                 }
 
-                const tempId = generateId();
                 const apiPayload = {
-                    id: tempId,
                     date: parseDate,
                     category: cat,
                     sub: sub,
@@ -791,33 +588,19 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
                     notes: nts || ''
                 };
 
-                // Optimistically add to list
-                const optimisticTx: Transaction = {
-                    ...apiPayload,
-                    date: parseDate.toISOString().split('T')[0], // Local format
-                    week: formatDateRange(getWeekRange(parseDate).start, getWeekRange(parseDate).end),
-                    isPaid: false
-                };
-                newTxs.push(optimisticTx);
-
                 // Sync
-                try {
-                    const res = await fetch('/api/transactions', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ...apiPayload, updatedBy: currentUser }),
-                    });
-                    if (!res.ok) throw new Error('API Error');
-                } catch (syncErr) {
-                    addToSyncQueue({
-                        id: tempId,
-                        url: '/api/transactions',
-                        method: 'POST',
-                        body: { ...apiPayload, updatedBy: currentUser }
-                    });
-                    updatePendingCount();
-                }
+                const res = await fetch('/api/transactions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...apiPayload, updatedBy: currentUser }),
+                });
+                if (!res.ok) throw new Error('API Error');
+
+                const saved = await res.json();
+                newTxs.push(mapApiToLocal(saved));
+
             } catch (e) {
+                console.error("Error importing line:", e);
                 errorCount++;
             }
         }
@@ -862,19 +645,15 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
         showToast(isNew ? "Categoría creada" : "Categoría actualizada", 'success');
 
         try {
-            await fetch('/api/categories', {
+            const res = await fetch('/api/categories', {
                 method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...payload, updatedBy: currentUser })
             });
+            if (!res.ok) throw new Error('API Error');
         } catch (e) {
-            addToSyncQueue({
-                id: tempId,
-                url: '/api/categories',
-                method,
-                body: payload
-            });
-            updatePendingCount();
+            console.error("Error saving category", e);
+            showToast("Error de conexión", 'error');
         }
     };
 
@@ -890,8 +669,8 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
                 try {
                     await fetch(`/api/categories?id=${id}&user=${currentUser}`, { method: 'DELETE' });
                 } catch (e) {
-                    addToSyncQueue({ id, url: `/api/categories?id=${id}&user=${currentUser}`, method: 'DELETE' });
-                    updatePendingCount();
+                    console.error("Error deleting category", e);
+                    showToast("Error de conexión", 'error');
                 }
             }
         });
@@ -921,19 +700,15 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
         showToast("Subcategoría agregada", 'success');
 
         try {
-            await fetch('/api/categories', {
+            const res = await fetch('/api/categories', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...cat, subs: newSubs, updatedBy: currentUser })
             });
+            if (!res.ok) throw new Error('API Error');
         } catch (e) {
-            addToSyncQueue({
-                id: catId,
-                url: '/api/categories',
-                method: 'PUT',
-                body: { ...cat, subs: newSubs, updatedBy: currentUser }
-            });
-            updatePendingCount();
+            console.error("Error adding subcategory", e);
+            showToast("Error de conexión", 'error');
         }
     };
 
@@ -956,13 +731,8 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
                         body: JSON.stringify({ ...cat, subs: newSubs, updatedBy: currentUser })
                     });
                 } catch (e) {
-                    addToSyncQueue({
-                        id: catId,
-                        url: '/api/categories',
-                        method: 'PUT',
-                        body: { ...cat, subs: newSubs, updatedBy: currentUser }
-                    });
-                    updatePendingCount();
+                    console.error("Error deleting subcategory", e);
+                    showToast("Error de conexión", 'error');
                 }
             }
         });
@@ -993,19 +763,6 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
                         </div>
                         {/* Desktop Nav */}
                         <div className="hidden md:flex items-center gap-1">
-                            <div title={dbStatus === 'online' ? 'Conectado al Servidor' : 'Modo Local (Sin conexión)'} className={`w-2 h-2 rounded-full mr-2 ${dbStatus === 'online' ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`}></div>
-
-                            {pendingCount > 0 && (
-                                <button
-                                    onClick={runSync}
-                                    className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold mr-2 flex items-center gap-1 hover:bg-yellow-200 transition-colors"
-                                    title="Clic para sincronizar cambios pendientes"
-                                >
-                                    <UploadCloud size={14} />
-                                    {pendingCount} Pendiente{pendingCount !== 1 ? 's' : ''}
-                                </button>
-                            )}
-
                             <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${activeTab === 'dashboard' ? 'bg-slate-100 dark:bg-slate-800 text-blue-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Inicio</button>
                             <button onClick={() => setActiveTab('recurring')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${activeTab === 'recurring' ? 'bg-slate-100 dark:bg-slate-800 text-blue-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Fijos</button>
                             <button onClick={() => setActiveTab('input')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${activeTab === 'input' ? 'bg-slate-100 dark:bg-slate-800 text-blue-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Ingresar</button>
@@ -1014,16 +771,6 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
                         </div>
                     </div>
                     <div className="flex gap-2 items-center">
-                        {pendingCount > 0 && (
-                            <button
-                                onClick={runSync}
-                                disabled={isSyncing}
-                                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold transition-all ${isSyncing ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 animate-pulse' : 'bg-blue-50 dark:bg-blue-900/40 text-blue-600 hover:bg-blue-100'}`}
-                            >
-                                <Repeat size={14} className={isSyncing ? 'animate-spin' : ''} />
-                                {pendingCount} pendiente{pendingCount > 1 ? 's' : ''}
-                            </button>
-                        )}
                         <button onClick={() => setShowBulkModal(true)} aria-label="Importar con IA" title="Importar con IA" className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-full text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800"><UploadCloud size={18} /></button>
                         <button onClick={() => setDarkMode(!darkMode)} aria-label="Cambiar tema" title="Cambiar tema" className="p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full">{darkMode ? <Sun size={18} /> : <Moon size={18} />}</button>
                     </div>
@@ -1116,10 +863,6 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
                             currentUser={currentUser}
                             setCurrentUser={handleSetUser}
                             onResetDevice={handleResetDevice}
-                            dbStatus={dbStatus}
-                            checkDbStatus={checkDbStatus}
-                            lastDbError={lastDbError}
-                            lastSyncError={lastSyncError}
                         />
                     )}
                 </main>
@@ -1440,7 +1183,7 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
                                     ))}
                                 </div>
 
-                                <p className="text-center text-[9px] text-slate-500 font-bold uppercase tracking-[0.2em]">Finanzas Vásquez Pro v2.2.1 (Diag)</p>
+                                <p className="text-center text-[9px] text-slate-500 font-bold uppercase tracking-[0.2em]">Finanzas Vásquez Pro v2.3</p>
                             </div>
                         </div>
                     )
