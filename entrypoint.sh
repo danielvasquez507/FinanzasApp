@@ -2,6 +2,11 @@
 # entrypoint.sh
 
 # Esperar a que el volumen esté listo (opcional, pero buena práctica)
+# Debugging: Listar binarios para encontrar Prisma
+ls -la /app/node_modules/.bin
+ls -la /app/node_modules/prisma
+
+# Esperar a que el volumen esté listo (opcional, pero buena práctica)
 echo "Starting application..."
 
 # Ejecutar migraciones de Prisma
