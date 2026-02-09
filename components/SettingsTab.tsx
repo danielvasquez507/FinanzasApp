@@ -17,6 +17,10 @@ interface SettingsTabProps {
     currentUser: string;
     setCurrentUser: (user: string) => void;
     onResetDevice: () => void;
+    dbStatus: 'online' | 'offline';
+    checkDbStatus: () => void;
+    lastDbError: string | null;
+    lastSyncError: string | null;
 }
 
 const SettingsTab = ({
@@ -32,7 +36,11 @@ const SettingsTab = ({
     setInputModal,
     currentUser,
     setCurrentUser,
-    onResetDevice
+    onResetDevice,
+    dbStatus,
+    checkDbStatus,
+    lastDbError,
+    lastSyncError
 }: SettingsTabProps) => {
     return (
         <div className="pt-4 px-4 pb-4 animate-in slide-in-from-right-10">
@@ -231,12 +239,44 @@ const SettingsTab = ({
                             <div className="flex gap-2">
                                 <div className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-full flex items-center gap-2 border border-red-100 dark:border-red-900/50">
                                     <Heart size={12} className="fill-current" />
-                                    <span className="text-[9px] font-black uppercase tracking-tight">Premium v2.2</span>
+                                    <span className="text-[9px] font-black uppercase tracking-tight">Premium v2.2.1</span>
                                 </div>
                             </div>
                         </div>
 
                         <p className="text-[9px] text-slate-300 dark:text-slate-600 font-bold uppercase pt-2">© 2026 Daniel Vásquez. Code with Vibe.</p>
+
+                        <div className="w-full bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 text-left space-y-2">
+                            <h4 className="font-bold text-xs dark:text-white uppercase flex items-center gap-2">
+                                <AlertCircle size={12} /> Diagnóstico de Red
+                            </h4>
+
+                            <div className="flex justify-between items-center text-xs">
+                                <span className="text-slate-500">Estado BD:</span>
+                                <span className={`font-bold ${dbStatus === 'online' ? 'text-green-500' : 'text-red-500'}`}>
+                                    {dbStatus.toUpperCase()}
+                                </span>
+                            </div>
+
+                            {lastDbError && (
+                                <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded text-[10px] text-red-600 font-mono break-all">
+                                    DB Err: {lastDbError}
+                                </div>
+                            )}
+
+                            {lastSyncError && (
+                                <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded text-[10px] text-orange-600 font-mono break-all">
+                                    Sync Err: {lastSyncError}
+                                </div>
+                            )}
+
+                            <button
+                                onClick={() => checkDbStatus()}
+                                className="w-full py-2 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-300 transition-colors"
+                            >
+                                Probar Conexión
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

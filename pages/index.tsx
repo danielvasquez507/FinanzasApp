@@ -112,10 +112,13 @@ export default function App() {
         setTimeout(() => setToast(null), 3000);
     };
 
+
     // DB Status
     const [dbStatus, setDbStatus] = useState<'online' | 'offline'>('online');
     const [isSyncing, setIsSyncing] = useState(false);
     const [pendingCount, setPendingCount] = useState(0);
+    const [lastDbError, setLastDbError] = useState<string | null>(null);
+    const [lastSyncError, setLastSyncError] = useState<string | null>(null);
 
     const updatePendingCount = () => {
         if (typeof window !== 'undefined') {
@@ -133,8 +136,9 @@ export default function App() {
                 loadData();
             }
             updatePendingCount();
-        } catch (e) {
+        } catch (e: any) {
             console.error("Sync error", e);
+            setLastSyncError(e.message || JSON.stringify(e));
         } finally {
             setIsSyncing(false);
         }
@@ -148,6 +152,7 @@ export default function App() {
                     await runSync();
                 }
                 setDbStatus('online');
+                setLastDbError(null); // Clear error on success
 
                 // Check for remote updates
                 if (currentUser) {
@@ -165,9 +170,13 @@ export default function App() {
                     }
                 }
             }
-            else setDbStatus('offline');
-        } catch (e) {
+            else {
+                setDbStatus('offline');
+                setLastDbError(`HTTP Error: ${res.status} ${res.statusText}`);
+            }
+        } catch (e: any) {
             setDbStatus('offline');
+            setLastDbError(e.message || "Network Error (Fetch Failed)");
         }
         updatePendingCount();
     };
@@ -1107,6 +1116,10 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
                             currentUser={currentUser}
                             setCurrentUser={handleSetUser}
                             onResetDevice={handleResetDevice}
+                            dbStatus={dbStatus}
+                            checkDbStatus={checkDbStatus}
+                            lastDbError={lastDbError}
+                            lastSyncError={lastSyncError}
                         />
                     )}
                 </main>
@@ -1427,7 +1440,7 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
                                     ))}
                                 </div>
 
-                                <p className="text-center text-[9px] text-slate-500 font-bold uppercase tracking-[0.2em]">Finanzas Vásquez Pro v2.2</p>
+                                <p className="text-center text-[9px] text-slate-500 font-bold uppercase tracking-[0.2em]">Finanzas Vásquez Pro v2.2.1 (Diag)</p>
                             </div>
                         </div>
                     )
