@@ -1,11 +1,10 @@
-import React from 'react';
-import { ChevronRight, ChevronLeft, Moon, Sun, UploadCloud, Grid, AlertCircle, Plus, Edit3, Trash2, X, Heart, User, FileJson, Activity, Cpu, Database, RefreshCw, Repeat } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Moon, Sun, UploadCloud, Grid, AlertCircle, Plus, Edit3, Trash2, X, Heart, User, Activity, Cpu, Database, RefreshCw, Repeat } from 'lucide-react';
 import { Category } from '@/types';
 import { ICON_LIB, COLORS_LIB } from '@/lib/icons';
 
 interface SettingsTabProps {
-    settingsTab: 'menu' | 'themes' | 'import' | 'categories' | 'info' | 'validation';
-    setSettingsTab: (tab: 'menu' | 'themes' | 'import' | 'categories' | 'info' | 'validation') => void;
+    settingsTab: 'menu' | 'themes' | 'categories' | 'info' | 'validation';
+    setSettingsTab: (tab: 'menu' | 'themes' | 'categories' | 'info' | 'validation') => void;
     darkMode: boolean;
     setDarkMode: (val: boolean) => void;
     setShowBulkModal: (val: boolean) => void;
@@ -97,17 +96,6 @@ const SettingsTab = ({
                             </div>
                         </div>
                         <ChevronRight size={20} className="text-slate-300" />
-                    </button>
-
-                    <button onClick={() => setSettingsTab('import')} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-all border border-slate-100 dark:border-slate-700 group">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-xl group-hover:scale-110 transition-transform"><FileJson size={20} /></div>
-                            <div className="text-left">
-                                <p className="font-bold text-slate-700 dark:text-white text-sm">IA & Importación</p>
-                                <p className="text-[10px] text-slate-400 font-medium">Procesar mensajes de WhatsApp</p>
-                            </div>
-                        </div>
-                        <ChevronRight size={18} className="text-slate-300" />
                     </button>
 
                     <button onClick={() => setSettingsTab('validation')} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-all border border-slate-100 dark:border-slate-700 group">

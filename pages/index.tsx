@@ -67,7 +67,7 @@ export default function App() {
     const [inputModal, setInputModal] = useState<{ open: boolean, title: string, placeholder: string, value: string, catId: string } | null>(null);
     const [showListHelp, setShowListHelp] = useState(false);
     const [showHeader, setShowHeader] = useState(true);
-    const [settingsTab, setSettingsTab] = useState<'menu' | 'themes' | 'import' | 'categories' | 'info' | 'validation'>('menu');
+    const [settingsTab, setSettingsTab] = useState<'menu' | 'themes' | 'categories' | 'info' | 'validation'>('menu');
     const [currentUser, setCurrentUser] = useState<string>('');
     const [showUserModal, setShowUserModal] = useState(false);
 
