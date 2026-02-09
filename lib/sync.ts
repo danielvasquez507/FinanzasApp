@@ -38,7 +38,7 @@ export const removeFromQueue = (timestamp: number) => {
 export const processSyncQueue = async () => {
     if (typeof window === 'undefined') return 0;
     // Check both navigator and our own db check if we want, but let's stick to simple first
-    if (!navigator.onLine) return 0;
+
 
     const queue = getSyncQueue();
     if (queue.length === 0) return 0;

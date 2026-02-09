@@ -455,17 +455,13 @@ export default function App() {
         setNotes('');
 
         try {
-            if (dbStatus === 'online') {
-                const res = await fetch('/api/transactions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                });
-                if (!res.ok) throw new Error('API Error');
-                showToast("Gasto guardado", 'success');
-            } else {
-                throw new Error('Offline');
-            }
+            const res = await fetch('/api/transactions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error('API Error');
+            showToast("Gasto guardado", 'success');
         } catch (e) {
             addToSyncQueue({
                 id: tempId,
@@ -490,11 +486,10 @@ export default function App() {
                 setEditingTx(null);
 
                 try {
-                    if (dbStatus === 'online') {
-                        await fetch(`/api/transactions?id=${id}`, { method: 'DELETE' });
-                    } else { throw new Error('Offline'); }
+                    await fetch(`/api/transactions?id=${id}`, { method: 'DELETE' });
                 } catch (e) {
                     addToSyncQueue({ id, url: `/api/transactions?id=${id}`, method: 'DELETE' });
+                    updatePendingCount();
                 }
             }
         });
@@ -518,13 +513,11 @@ export default function App() {
         // Sync
         for (const tx of txsToUpdate) {
             try {
-                if (dbStatus === 'online') {
-                    await fetch(`/api/transactions?id=${tx.id}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ...tx, isPaid: targetState })
-                    });
-                } else { throw new Error('Offline'); }
+                await fetch(`/api/transactions?id=${tx.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...tx, isPaid: targetState })
+                });
             } catch (e) {
                 addToSyncQueue({
                     id: tx.id,
@@ -532,6 +525,7 @@ export default function App() {
                     method: 'PUT',
                     body: { ...tx, isPaid: targetState, updatedBy: currentUser }
                 });
+                updatePendingCount();
             }
         }
     };
@@ -567,13 +561,11 @@ export default function App() {
         showToast(newVal ? "Marcado como pagado" : "Marcado como pendiente", 'info');
 
         try {
-            if (dbStatus === 'online') {
-                await fetch(`/api/transactions?id=${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...tx, isPaid: newVal, updatedBy: currentUser })
-                });
-            } else { throw new Error('Offline'); }
+            await fetch(`/api/transactions?id=${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...tx, isPaid: newVal, updatedBy: currentUser })
+            });
         } catch (e) {
             addToSyncQueue({
                 id,
@@ -581,6 +573,7 @@ export default function App() {
                 method: 'PUT',
                 body: { ...tx, isPaid: newVal }
             });
+            updatePendingCount();
         }
     };
 
@@ -615,10 +608,8 @@ export default function App() {
         showToast(editingRecurring ? "Recurrente actualizado" : "Recurrente creado", 'success');
 
         try {
-            if (dbStatus === 'online') {
-                const method = editingRecurring ? 'PUT' : 'POST';
-                await fetch('/api/recurring', { method, body: JSON.stringify({ ...payload, updatedBy: currentUser }), headers: { 'Content-Type': 'application/json' } });
-            } else { throw new Error('Offline'); }
+            const method = editingRecurring ? 'PUT' : 'POST';
+            await fetch('/api/recurring', { method, body: JSON.stringify({ ...payload, updatedBy: currentUser }), headers: { 'Content-Type': 'application/json' } });
         } catch (e) {
             addToSyncQueue({
                 id: tempId,
@@ -626,6 +617,7 @@ export default function App() {
                 method: editingRecurring ? 'PUT' : 'POST',
                 body: { ...payload, updatedBy: currentUser }
             });
+            updatePendingCount();
         }
     };
 
@@ -641,11 +633,10 @@ export default function App() {
                 showToast("Recurrente eliminado", 'success');
 
                 try {
-                    if (dbStatus === 'online') {
-                        await fetch(`/api/recurring?id=${id}&user=${currentUser}`, { method: 'DELETE' });
-                    } else { throw new Error('Offline'); }
+                    await fetch(`/api/recurring?id=${id}&user=${currentUser}`, { method: 'DELETE' });
                 } catch (e) {
                     addToSyncQueue({ id, url: `/api/recurring?id=${id}&user=${currentUser}`, method: 'DELETE' });
+                    updatePendingCount();
                 }
             }
         });
@@ -796,14 +787,12 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
 
                 // Sync
                 try {
-                    if (dbStatus === 'online') {
-                        const res = await fetch('/api/transactions', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ ...apiPayload, updatedBy: currentUser }),
-                        });
-                        if (!res.ok) throw new Error('API Error');
-                    } else { throw new Error('Offline'); }
+                    const res = await fetch('/api/transactions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ...apiPayload, updatedBy: currentUser }),
+                    });
+                    if (!res.ok) throw new Error('API Error');
                 } catch (syncErr) {
                     addToSyncQueue({
                         id: tempId,
@@ -811,6 +800,7 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
                         method: 'POST',
                         body: { ...apiPayload, updatedBy: currentUser }
                     });
+                    updatePendingCount();
                 }
             } catch (e) {
                 errorCount++;
@@ -857,13 +847,11 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
         showToast(isNew ? "Categoría creada" : "Categoría actualizada", 'success');
 
         try {
-            if (dbStatus === 'online') {
-                await fetch('/api/categories', {
-                    method,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...payload, updatedBy: currentUser })
-                });
-            } else { throw new Error('Offline'); }
+            await fetch('/api/categories', {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...payload, updatedBy: currentUser })
+            });
         } catch (e) {
             addToSyncQueue({
                 id: tempId,
@@ -871,6 +859,7 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
                 method,
                 body: payload
             });
+            updatePendingCount();
         }
     };
 
@@ -884,11 +873,10 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
                 setConfirmModal(null);
 
                 try {
-                    if (dbStatus === 'online') {
-                        await fetch(`/api/categories?id=${id}&user=${currentUser}`, { method: 'DELETE' });
-                    } else { throw new Error('Offline'); }
+                    await fetch(`/api/categories?id=${id}&user=${currentUser}`, { method: 'DELETE' });
                 } catch (e) {
                     addToSyncQueue({ id, url: `/api/categories?id=${id}&user=${currentUser}`, method: 'DELETE' });
+                    updatePendingCount();
                 }
             }
         });
@@ -918,13 +906,11 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
         showToast("Subcategoría agregada", 'success');
 
         try {
-            if (dbStatus === 'online') {
-                await fetch('/api/categories', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...cat, subs: newSubs, updatedBy: currentUser })
-                });
-            } else { throw new Error('Offline'); }
+            await fetch('/api/categories', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...cat, subs: newSubs, updatedBy: currentUser })
+            });
         } catch (e) {
             addToSyncQueue({
                 id: catId,
@@ -932,6 +918,7 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
                 method: 'PUT',
                 body: { ...cat, subs: newSubs, updatedBy: currentUser }
             });
+            updatePendingCount();
         }
     };
 
@@ -948,13 +935,11 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
                 setConfirmModal(null);
 
                 try {
-                    if (dbStatus === 'online') {
-                        await fetch('/api/categories', {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ ...cat, subs: newSubs, updatedBy: currentUser })
-                        });
-                    } else { throw new Error('Offline'); }
+                    await fetch('/api/categories', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ...cat, subs: newSubs, updatedBy: currentUser })
+                    });
                 } catch (e) {
                     addToSyncQueue({
                         id: catId,
@@ -962,6 +947,7 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
                         method: 'PUT',
                         body: { ...cat, subs: newSubs, updatedBy: currentUser }
                     });
+                    updatePendingCount();
                 }
             }
         });
@@ -993,6 +979,17 @@ Devuelve SOLO el bloque CSV, sin texto adicional markdown.`;
                         {/* Desktop Nav */}
                         <div className="hidden md:flex items-center gap-1">
                             <div title={dbStatus === 'online' ? 'Conectado al Servidor' : 'Modo Local (Sin conexión)'} className={`w-2 h-2 rounded-full mr-2 ${dbStatus === 'online' ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`}></div>
+
+                            {pendingCount > 0 && (
+                                <button
+                                    onClick={runSync}
+                                    className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold mr-2 flex items-center gap-1 hover:bg-yellow-200 transition-colors"
+                                    title="Clic para sincronizar cambios pendientes"
+                                >
+                                    <UploadCloud size={14} />
+                                    {pendingCount} Pendiente{pendingCount !== 1 ? 's' : ''}
+                                </button>
+                            )}
 
                             <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${activeTab === 'dashboard' ? 'bg-slate-100 dark:bg-slate-800 text-blue-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Inicio</button>
                             <button onClick={() => setActiveTab('recurring')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${activeTab === 'recurring' ? 'bg-slate-100 dark:bg-slate-800 text-blue-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Fijos</button>
