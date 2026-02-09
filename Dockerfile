@@ -1,6 +1,7 @@
 # Install dependencies only when needed
 # Install dependencies only when needed
-FROM node:20-slim AS deps
+# Install dependencies only when needed
+FROM node:20-bullseye-slim AS deps
 RUN apt-get update && apt-get install -y openssl python3 make g++
 WORKDIR /app
 
@@ -9,7 +10,7 @@ COPY package.json package-lock.json* ./
 RUN npm install
 
 # Rebuild the source code only when needed
-FROM node:20-slim AS builder
+FROM node:20-bullseye-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -21,7 +22,7 @@ RUN npx prisma generate
 RUN npm run build
 
 # Production image, copy all the files and run next
-FROM node:20-slim AS runner
+FROM node:20-bullseye-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV production
