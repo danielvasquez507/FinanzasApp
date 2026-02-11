@@ -12,8 +12,8 @@ echo "Starting application..."
 # Ejecutar migraciones de Prisma
 # Nota: Asegurarse de que DATABASE_URL apunte a la ubicación correcta en el volumen
 if [ -n "$DATABASE_URL" ]; then
-  echo "Running Prisma migrations..."
-  npx prisma migrate deploy
+  echo "Syncing database schema (db push)..."
+  npx prisma db push --accept-data-loss
 fi
 
 # Iniciar la aplicación
