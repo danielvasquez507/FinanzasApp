@@ -432,7 +432,7 @@ const SettingsTab = ({
                         <div className="w-full space-y-4">
                             <div className="flex flex-col items-center gap-2">
                                 <p className="text-[11px] font-bold text-slate-500 text-center px-8">
-                                    Software desarrollado para el control inteligente de ingresos y gastos familiares.
+                                    Versión 1.3.1 • Premium
                                 </p>
                                 <div className="flex gap-4 mt-2">
                                     <a
